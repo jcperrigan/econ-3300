@@ -1,0 +1,19 @@
+# macOS
+.DS_Store
+
+# R/RStudio
+.Rhistory
+.RData
+.Ruserdata
+.Rproj.user/
+
+# R Markdown temporary/cache files
+*_cache/
+*.utf8.md
+*.knit.md
+
+# Quarto
+.quarto/
+
+# VS Code workspace settings
+.vscode/
