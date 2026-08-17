@@ -1,10 +1,9 @@
 ---
-title: "ECON 8300: Econometrics"
+title: "ECON 3300: Econometrics"
 subtitle: "Course Syllabus · Fall 2026"
 author: "Jessica Perrigan"
 
 toc: true
-toc-depth: 2
 toc-title: "Contents"
 
 format:
@@ -20,11 +19,11 @@ format:
 lang: en
 ---
 
-**Days and times:** Mondays, 6:00 p.m. to 8:40 p.m.
+**Days and times:** Mondays, 3:00 p.m. to 5:40 p.m.
 
 **Dates:** August 24 to December 18, 2026
 
-**Location:** Remote, [click here to enter the Zoom classroom](https://unomaha.zoom.us/j/99958143068)
+**Location:** Remote, [click here to enter the Zoom classroom](https://unomaha.zoom.us/j/92904049672)
 
 **Instructor:** Jessica Perrigan, [jperrigan@unomaha.edu](mailto:jperrigan@unomaha.edu)
 
@@ -79,7 +78,7 @@ The best way to learn is by engaging with the material. To be an economist (or a
 
 I expect you to take the problem sets seriously as practice opportunities, and to ask questions when you have them. I won’t know if you are struggling with material unless you tell me, so I expect that you will be an active participant in your learning. I also expect that you have read the chapters and watched the lecture videos before coming to class.
 
-It is also expected that you are familiar with probability and statistics. Please review the “Math Refresher B: Fundamentals of Probability” and the “Math Refresher C: Fundamentals of Mathematical Statistics” if you need to.
+It is also expected that you are familiar with probability and statistics. We will go through chapters two and three that review probability and statistics, but if there is anything that you need to review more please make sure to take some time to do so. 
 
 Finally, I expect you to have meaningful and constructive dialogue and to collaborate with your classmates. This requires a degree of mutual respect and willingness to listen. Respect for individual differences and alternative viewpoints will be maintained at all times in this class. One’s words and use of language should be temperate and within acceptable bounds of civility and decency.
 
@@ -117,29 +116,37 @@ One of the great advantages of university is the opportunity to problem-solve wi
 
 This course will be graded as follows:
 
-- Midterm:  20%
+- Midterm:  15%
 
-- Cumulative Final:  20%
+- Cumulative Final:  15%
 
-- Problem sets: 20%
+- Problem sets: 18%
 
 - Pre-test: 0%
 
 - Post-test: 3%
 
-- Research paper: 37%
+- Industry econometrics challenge: 49%
 
-  - Research proposal: 3%
+  - Client proposal: 3%
 
-  - First draft: 4%
+  - Data audit and descriptive analysis: 4%
 
-  - First draft peer review: 3%
+  - Empirical strategy memo: 5%
 
-  - Final paper: 18%
+  - Preliminary results: 6%
 
-  - Presentation and oral defense: 7%
+  - Progress conference/ checkpoint: 3%
 
-  - Presentation-day engagement: 2%
+  - Peer quality-assurance review: 3%
+
+  - Final consulting report: 12%
+
+  - Client presentation: 5%
+
+  - Individual oral defense: 5%
+
+  Individual contribution/ reflection memo: 3%
 
 
 Final grades will be based on the total points you earn, and distributed according to the following scale:
@@ -190,7 +197,7 @@ I do not accept late problem sets (see Late Policy). I will drop the lowest prob
 
 ### Exams
 
-There is one midterm exam and one cumulative final exam, each worth 20% of your final grade. The exam will include R code and output, some of which is useful for answering the questions.
+There is one midterm exam and one cumulative final exam, each worth 15% of your final grade. The exam will include R code and output, some of which is useful for answering the questions.
 
 I will provide a set of sample questions the week before the exam. I will not provide answer keys to the practice questions, but I am happy to help you with questions in class or during office hours.
 
@@ -198,27 +205,38 @@ The exams will be completed during the course period. You may use your notes, bu
 
 
 
-### Project
+### Industry Econometrics Challenge
 
-The objective for this assignment is for you to apply the econometric methods that we will study. You may be working in groups (depending on class size). There are data sets available to use or you may use one of your own choice.
+The objective of this assignment is to apply the econometric methods studied in this course to an industry-related problem. You will work in a team to analyze a business question using data and present your findings as recommendations to a client or decision-maker.
 
-You will choose your own research question that can be answered using data. Choose your research question carefully! Developing and motivating your research question entails a review of the existing economic literature, as well as consideration of data availability.
+Your team will select from the available client briefs and datasets. You will need to define the client’s question carefully, determine what the available data can and cannot establish, develop an appropriate econometric model, and translate your results into useful conclusions. Your analysis should distinguish between prediction, association, and causal inference and should clearly explain any important limitations.
 
-Use chapter 19 in Wooldridge as a resource. It’s a great guide to completing an empirical econometrics project.
+The final deliverables will include a concise consulting report, a reproducible technical appendix, and a client presentation. The presentation will be followed by an oral defense in which individual team members will be asked to explain the group’s modeling decisions, interpret results, and discuss limitations. Each student will also submit an individual contribution and reflection memo.
 
-The total empirical project (including research proposal, first draft, peer reviews, final paper, and presentation) accounts for 37% percent of your final grade and will be due in stages over the course of the semester.  The relevant assignment dates are listed below.
+The Industry Econometrics Challenge accounts for 49% of your final grade and will be completed in stages throughout the semester. These checkpoints are intended to give your team regular feedback and prevent major problems with the question, data, or empirical strategy from carrying into the final analysis.
+
 
 **Important Deadlines:**
 
-- September 20: Research Proposal Due
+- September 13: Client Proposal Due
 
-- November 1: First Draft Due
+- October 4: Data Audit and Descriptive Analysis Due
+
+- October 18: Empirical Strategy Memo Due
+
+- November 1: Preliminary Results
+
+- November 15: Peer Quality-Assurance Review Due
+
+- November 16–20: Team Progress Conference
 
 - November 8: Peer Reviews Due
 
-- November 29: Final Projects Due
+- November 29: Final Consulting Report and Technical Appendix due 
 
-- November 30: Final Presentations
+- November 30: Client Presentation and Oral Defense
+
+- December 7: Individual Contribution and Reflection Memo Due
 
 
 
@@ -290,17 +308,10 @@ I do highly suggest that you engage with the optional materials, as they can pro
 
 **Required: **
 
-- Wooldridge’s Introductory Econometrics, 8th Edition (though previous editions are OK too). Print ISBN 0357900162, Digital ISBN 9798214048499. [For instructions on how to buy the book via the bookstore, click here.](https://www.unomaha.edu/registrar/students/after-enrollment/buying-textbooks.php)
+- Stock and Watson's **Introduction to Econometrics**, ISNB-13 9780136879787. You have access to this book through First Day Access. [To opt out of First-Day Access, and for more information, click here.](https://www.omahamaverickstore.com/first_day_access_faq.asp)
 
 - [Econometrics with R (click here to access the online book)](https://www.econometrics-with-r.org/) is a great resource that shows a lot of examples of econometrics problems worked out using R.
 
-**Supplementary:**
-
-- *Joshua D. Angrist and Jörn-Steffen Pischke, *Mostly Harmless Econometrics: An Empiricist’s Companion,* ISBN 978-0691120355
-
-**Comments on the supplemental material:**
-
-MHE is a great book, and I just really like it. I will recommend sections from it sometimes when I think they are especially relevant, but it is an optional and supplementary resource.
 
 
 
@@ -308,31 +319,31 @@ MHE is a great book, and I just really like it. I will recommend sections from i
 
 - Week 1: Introduction to Econometrics and Econometric Data, Introduction to R
 
-- Week 2: Simple Linear Regression
+- Week 2: Review of Statistics and Probability
 
 - Week 3: No Class, Labor Day
 
-- Week 4: Multiple Regression: Estimation
+- Week 4: Simple Linear Regression
 
-- Week 5: Multiple Regression: Inferences
+- Week 5: Simple Linear Regression: Hypothesis Tests and Confidence Intervals
 
-- Week 6: Multiple Regression: OLS Asymptotics
+- Week 6: Linear Regression with Multiple Regressors
 
-- Week 7: Multiple Regression: Further Issues
+- Week 7: Nonlinear Regression Functions
 
 - Week 8: Midterm Exam
 
 - Week 9: No Class, Fall Break
 
-- Week 10: Limited Dependent Variable Models
+- Week 10: Assessing Regression Studies
 
-- Week 11: Heteroskedasticity
+- Week 11: Binary Dependent Variable Models
 
-- Week 12: More on Specification and Data Issues
+- Week 12: Panel Data
 
-- Week 13: Panel Data
+- Week 13: Experiments and Quasi-Experiments
 
-- Week 14: Difference-in-Differences
+- Week 14: Prediction with Many Regressors and Big Data
 
 - Week 15: Presentations
 

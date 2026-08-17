@@ -1,5 +1,5 @@
 
-# ECON 8300
+# ECON 3300
 
 ## Econometrics
 
@@ -46,11 +46,17 @@ Opening remarks.
 ## A definition of econometrics
 
 <div class="fragment">
-The development of statistical methods for estimating economic relationships, testing economic theories, and evaluating and implementing government and business policy.
+The science and art of using economic theory and statistical techniques to analyze economic data.
 </div>
 
 Notes:
+Used in many branches of economics (finance, labor, macro, micro, marketing, policy).
+
+Also used in other social sciences, like political science and sociology.
+
 A common application of econometrics is the forecasting of macro variables like interest rates, inflation rates, and GDP but a) I'm not as interested and b) there's a whole forecasting class!
+
+
 
 ---
 
