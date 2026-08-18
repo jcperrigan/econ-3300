@@ -28,7 +28,7 @@ Opening remarks.
 <ul>
   <li class = "fragment">Problem sets</li>
   <li class = "fragment">Exams</li>
-  <li class = "fragment">Research project</li>
+  <li class = "fragment">Industry econometrics project</li>
 </ul>
 
 ---
@@ -64,7 +64,6 @@ A common application of econometrics is the forecasting of macro variables like 
 
 <ol>
   <li class = "fragment">Question of interest</li>
-  <li class = "fragment">Economic model construction</li>
   <li class = "fragment">Conversion to econometric model</li>
     <ul>
       <li class = "fragment">Parameters</li>
