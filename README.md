@@ -1,8 +1,8 @@
-# econ-8300
+# econ-3300
 
 This repository holds datasets and other random stuff. For example:
 
-# ECON 8300 Datasets
+# ECON 3300 Datasets
 
 ## example-data.csv
 
