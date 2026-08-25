@@ -1,0 +1,303 @@
+---
+title: "ECON-3300"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    highlight: tango
+    includes:
+      in_header: wcag-overrides.html
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+```
+
+# Homework03
+
+Grading Rubric (per question):  
+2 points if complete and correct  
+0 points otherwise 
+
+
+## Retrieving your work
+
+This and all future homework .Rmd files are written in Markdown. The .Rmd file can be rendered as an .html file for easier viewing. 
+
+Once you have opened the .Rmd file, you may begin writing your answers beneath each problem. Do not remove any of the original problems from the file, because that makes it more difficult for the me to grade your assignment. 
+
+
+## Submitting your work
+
+When you upload your files to Canvas, you are to submit ***two*** files:
+
+a. Your reproducible document file (.Rmd) which should be saved as homework##-ID.Rmd. For example, my homework01 file would be saved as homework01-jperrigan.Rmd.
+
+b. Your rendered reproducible document file (.html) which should be saved as homework##-ID.html. For example, my homework01 file would be saved as homework01-jperrigan.html.
+
+Your ID is your Canvas username. It is also the text before the "@" symbol in your UNO email address.
+
+You have an unlimited number of submissions, but only the  latest submission will be viewed and graded. **Proper means that the file is correctly named and formatted. Latest means that the file is the most recent submission prior to the deadline. Remember the .Rmd file needs to render properly to .html before submitting.** 
+
+
+***
+
+All students are expected to complete all problems. If any problem asks you a particular question, be sure to answer it completely (with code, written sentences, or both).
+
+***Do not change anything in this file above the double line. Doing so will prevent your homework from being graded.***
+
+***
+***
+
+# Data and packages
+
+We will use the `bwght` dataset from the `wooldridge` package. It contains data on births in Pennsylvania. The variables used here are:
+
+- `bwght`: infant birth weight, in ounces
+- `smoker`: indicator equal to 1 if the mother smoked during pregnancy and 0 otherwise
+- `cigs`: average number of cigarettes smoked per day during pregnancy
+- `faminc`: family income, in thousands of dollars
+- `parity`: birth order of the child
+
+Use homoskedasticity-only standard errors unless otherwise specified.
+
+```{r packages}
+# Install these packages once if needed:
+# install.packages(c("wooldridge", "sandwich", "lmtest"))
+
+library(wooldridge)
+library(sandwich)
+library(lmtest)
+data("bwght")
+bwght$smoker <- ifelse(bwght$cigs > 0, 1, 0)
+```
+
+
+**#1** 
+
+1. Compute the mean birth weight for nonsmokers (`smoker = 0`) and smokers (`smoker = 1`). Save the two means in a named vector called `prob01_means`.
+2. Estimate
+
+$$
+bwght_i=\beta_0+\beta_1 smoker_i+u_i
+$$
+
+and save the model as `prob01_model`.
+3. Show numerically how the two regression coefficients are related to the two group means.
+4. Interpret the intercept and slope in context and include their units. 
+
+Save your written response as `prob01`.
+
+**Answer:**
+
+```{r, problem01}
+# prob01_means <-
+# prob01_model <-
+# prob01 <-
+```
+
+---
+
+**#2**  
+
+For the two smoking groups:
+
+1. Compute each group's sample size and sample variance of `bwght`.
+2. Manually calculate the standard error of the difference in sample means (see chapter 3) and save this standard error as `prob02_se`:
+
+$$
+SE(\bar{Y}_1-\bar{Y}_0)
+=\sqrt{\frac{s_1^2}{n_1}+\frac{s_0^2}{n_0}}.
+$$
+
+**Answer:**
+
+```{r, problem02}
+# prob02_se <-
+```
+
+---
+
+**#3**  
+
+Using the standard error calculated in problem 2, test
+
+$$
+H_0:\beta_1=0
+\qquad \text{against} \qquad
+H_1:\beta_1\neq 0.
+$$
+
+1. Calculate the test statistic manually and save it as `prob03_t`. (The t-statistic formula can be found in section 5.1).
+2. Calculate the two-sided large-sample p-value manually and save it as `prob03_p`. (Hint: use ```pnorm()```).
+3. State the decision at the 5% significance level and interpret the evidence in context.
+
+Save your written conclusion as `prob03`.
+
+**Answer:**
+
+```{r, problem03}
+# prob03_t <-
+# prob03_p <-
+# prob03 <-
+```
+
+---
+
+**#4**  
+
+A researcher claims that smoking during pregnancy is associated with an average birth-weight difference of exactly **-5 ounces**. Test
+
+$$
+H_0:\beta_1=-5
+\qquad \text{against} \qquad
+H_1:\beta_1\neq -5
+$$
+
+using the standard error $SE(\hat)
+
+1. Calculate and save the test statistic as `prob04_t`.
+2. Calculate and save the two-sided large-sample p-value as `prob04_p`.
+3. State the decision at the 5% level. Explain the difference between failing to reject $\beta_1=-5$ and proving that $\beta_1=-5$.
+
+Save your written conclusion as `prob04`.
+
+**Answer:**
+
+```{r, problem04}
+# prob04_t <-
+# prob04_p <-
+# prob04 <-
+```
+
+---
+
+**#5**  
+
+Test whether smoking is associated with **lower** average birth weight:
+
+$$
+H_0:\beta_1\geq 0
+\qquad \text{against} \qquad
+H_1:\beta_1<0.
+$$
+
+1. Calculate the one-sided large-sample p-value using the t-statistic from Problem 3; save it as `prob05_p`.
+2. State the decision at the 1% significance level.
+3. Explain why this p-value is different from the two-sided p-value and why the direction of the alternative hypothesis must be picked before looking at the estimate.
+
+Save your explanation as `prob05`.
+
+**Answer:**
+
+```{r, problem05}
+# prob05_p <-
+# prob05 <-
+```
+
+---
+
+**#6**  
+
+Using the estimated coefficient on `smoker` and its standard error:
+
+1. Manually construct 95% large-sample confidence intervals for $\beta_1$ using the appropriate standard-normal critical values.
+3. Interpret the 95% confidence interval in context.
+4. Explain why the 95% interval is wider than a 90% interval would be.
+
+Save your written response as `prob06`.
+
+**Answer:**
+
+```{r, problem06}
+# prob06_ci <-
+# prob06 <-
+```
+
+---
+
+**#7**   
+
+Use your 95% confidence interval from Problem 6 to evaluate each null hypothesis:
+
+$$
+H_0:\beta_1=0, \qquad
+H_0:\beta_1=-5, \qquad
+H_0:\beta_1=-12.
+$$
+
+1. State whether each null would be rejected by a two-sided test at the 5% level.
+2. In 3–4 sentences, explain the general equivalence between a two-sided 5% hypothesis test and a 95% confidence interval.
+
+Save the three decisions in a named logical vector called `prob07_reject` and your explanation as `prob07`.
+
+**Answer:**
+
+```{r, problem07}
+# prob07_reject <-
+# prob07 <-
+```
+
+---
+
+**#8**  
+
+Estimate
+
+$$
+bwght_i=\beta_0+\beta_1 cigs_i+u_i
+$$
+
+and save it as `prob08_model`.
+
+1. Interpret the slope estimate.
+2. Test $H_0:\beta_1=0$ against $H_1:\beta_1\neq0$ at the 5% level.
+3. Construct a 95% confidence interval for $\beta_1$.
+
+Save your confidence interval to `prob08_conf` and your explanation as `prob08`.
+
+**Answer:**
+
+```{r, problem08}
+# prob08_conf <-
+# prob08 <-
+```
+
+---
+
+**#9**   
+
+Using the model from question 8, 
+
+1. Calculate the predicted difference in birth weight associated with smoking 10 additional cigarettes per day.
+2. Explain one reason the estimated association should not automatically be interpreted as a causal effect.
+
+Save the confidence interval as the predicted difference as `prob09_change`, and your written response as `prob09`.
+
+**Answer:**
+
+```{r, problem09}
+# prob09_change <-
+# prob09 <-
+```
+
+---
+
+**#10**  
+
+Answer the following in 7–9 sentences:
+
+1. What is the sampling distribution of an OLS estimator?
+2. What does its standard error measure?
+3. What does the central limit theorem contribute to large-sample regression inference?
+4. Why does Stock and Watson emphasize heteroskedasticity-robust standard errors in observational economic data?
+6. Distinguish statistical significance from economic importance, using the smoking coefficient as an example.
+
+Save your response as a string named `prob10`.
+
+**Answer:**
+
+```{r problem-10}
+# prob10 <-
+```
+

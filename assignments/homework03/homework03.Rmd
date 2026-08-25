@@ -1,15 +1,16 @@
 ---
-title: "ECON-8300"
-output: 
+title: "ECON-3300"
+output:
   html_document:
-    df_print: kable
+    toc: true
+    toc_float: true
     highlight: tango
-#    includes:
-#      in_header: wcag-overrides.html
+    includes:
+      in_header: wcag-overrides.html
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
 ```
 
 # Homework03
@@ -25,17 +26,18 @@ This and all future homework .Rmd files are written in Markdown. The .Rmd file c
 
 Once you have opened the .Rmd file, you may begin writing your answers beneath each problem. Do not remove any of the original problems from the file, because that makes it more difficult for the me to grade your assignment. 
 
+
 ## Submitting your work
 
 When you upload your files to Canvas, you are to submit ***two*** files:
 
-a. Your reproducible document file (.Rmd) which should be saved as homework##-ID.Rmd. For example, my homework03 file would be saved as homework03-jperrigan.Rmd.
+a. Your reproducible document file (.Rmd) which should be saved as homework##-ID.Rmd. For example, my homework01 file would be saved as homework01-jperrigan.Rmd.
 
-b. Your rendered reproducible document file (.html) which should be saved as homework##-ID.html. For example, my homework03 file would be saved as homework03-jperrigan.html.
+b. Your rendered reproducible document file (.html) which should be saved as homework##-ID.html. For example, my homework01 file would be saved as homework01-jperrigan.html.
 
 Your ID is your Canvas username. It is also the text before the "@" symbol in your UNO email address.
 
-You have an unlimited number of submissions, but only the latest submission will be viewed and graded. **Proper means that the file is correctly named and formatted. Latest means that the file is the most recent submission prior to the deadline. Remember the .Rmd file needs to render properly to .html before submitting.** 
+You have an unlimited number of submissions, but only the  latest submission will be viewed and graded. **Proper means that the file is correctly named and formatted. Latest means that the file is the most recent submission prior to the deadline. Remember the .Rmd file needs to render properly to .html before submitting.** 
 
 
 ***
@@ -47,287 +49,265 @@ All students are expected to complete all problems. If any problem asks you a pa
 ***
 ***
 
-### Use the URLs to access the data. No local files allowed.
+# Data and packages
 
-# Loading and looking at the data 
+We will use the `meap01` dataset from the `wooldridge` package. It contains data for 1,823 Michigan elementary schools. The variables used here are:
 
-We will be using one of the Wooldridge data sets for this problem set.
+- `math4`: percentage of fourth-grade students rated satisfactory in mathematics
+- `exppp`: expenditures per pupil, in dollars
+- `lexppp`: natural logarithm of expenditures per pupil
+- `lunch`: percentage of students eligible for free or reduced-price lunch
+- `enroll`: school enrollment
 
-To install the wooldridge package, use the following: "install.packages('wooldridge')". Simply remove the "#" in the below code box.
+```{r packages}
+# Install the package once if needed:
+# install.packages("wooldridge")
 
-If you already have it installed, add it to your notebook library.
-```{r}
-#install.packages('wooldridge')
 library(wooldridge)
+data("meap01")
 ```
 
-Once you have the wooldridge package loaded, you can start to use the datasets by using the following code to load the data and then attach it:
+---
 
-```{r}
-data('meap01')
-attach(meap01)
-```
+**#1**  
 
-Attaching the dataframe means you can refer to objects in the dataframe by simply their name, instead of needing to refer to the dataframe each time. This is useful when working with a single dataframe at a time.
+**Exploring the variables**
 
-Meap01 is a dataframe with 1,823 observations on 11 variables:
+Using `meap01`:
 
-* dcode: district code
+1. Report the number of observations, the mean, standard deviation, minimum, and maximum of `math4` and `exppp`.
+2. In 2–3 sentences, describe the units and the amount of variation in the two variables.
 
-* bcode: building code
-
-* math4: percent students satisfactory, 4th grade math
-
-* read4: percent students satisfactory, 4th grade reading
-
-* lunch: percent students eligible for free or reduced lunch 
-
-* enroll: school enrollment
-
-* expend: total spending, $
-
-* exppp: expenditures per pupil: expend/enroll
-
-* lenroll: log(enroll)
-
-* lexpend: log(expend)
-
-* lexppp: log(exppp)
-
-
-***
-
-**#1** 
-
-**Problem:** Using the "meap01" data:
-
-a) Compute the sample means of `exppp` and `math4`.
-
-b) Construct mean-centered variables:
-
-
-   $x_i^c = exppp_i - \bar{exppp}, \quad y_i^c = math4_i - \bar{math4}$
-
-
-Assign these values to `xc` and `yc`.
-
-c) Verify numerically that $\sum_i x_i^c = 0$ and $\sum_i y_i^c = 0$.
-   
+Save the table or object containing your descriptive statistics as `prob01_stats` and your written response as a string named `prob01`.
 
 **Answer:**
 
 ```{r, problem01}
-#xc <-
-#yc <-
+# prob01_stats <-
+# prob01 <-
 ```
 
-
-***
+---
 
 **#2** 
 
-**Problem:** 
+**Visualizing and quantifying the relationship**
 
-a) Using the centered variables, compute
+1. Construct a scatterplot with `exppp` on the horizontal axis and `math4` on the vertical axis. Add a fitted linear regression line and informative axis labels.
+2. In 2–3 sentences, describe the direction, strength, and shape of the relationship. Note any observations that might have unusually high influence. Is there a high correlation by sight? What about when you calculate the correlation?
 
-$\hat\beta_1 = \frac{\sum_i x_i^c y_i^c}{\sum_i (x_i^c)^2}$
-
-Assign your value to `b1_hat`.
-
-b) Then, using your calculated value for $\hat\beta_1$, calculate $\hat\beta_0$:
-
-$\hat{\beta_0} = \bar{y} - \hat{\beta_1}\bar{x}$.
-
-Assign your value to `b0_hat`.
-
+Save your written response as `prob02`.
 
 **Answer:**
 
 ```{r, problem02}
-#b1_hat <-
-#b0_hat <-
+# put your plot code here
+# prob02 <-
 ```
 
-***
+---
+
+**#3**  
 
 
-**#3** 
+Consider the population regression model
 
-**Problem:** 
+$$
+math4_i = \beta_0 + \beta_1 exppp_i + u_i.
+$$
 
-Estimate the regression
+In 4–6 sentences:
 
-$math4 = \beta_0 + \beta_1 exppp + u$
+1. Explain the economic meaning of $\beta_0$ and $\beta_1$, including their units. Are they population parameters or sample estimates?
+2. Explain what the error term $u_i$ contains. Give two concrete examples of factors that could belong in $u_i$.
 
-Report $\hat\beta_0$, $\hat\beta_1$, standard errors, and $R^2$.
-
-This R code should be written in the code chunk of the **Answer** section below. Save your model results to `prob03`. 
+Save your response as a string named `prob03`.
 
 **Answer:**
 
 ```{r, problem03}
-#prob03 <-
+# prob03 <-
 ```
 
-***
+---
 
 **#4** 
 
-**Problem:** 
+**Calculating the OLS estimators by hand**
 
-Construct a 95% confidence interval for $\beta_1$ **manually** using
+Let $x_i=exppp_i$ and $y_i=math4_i$.
 
-$\hat\beta_1 \pm t_{0.975,\,n-2} \cdot SE(\hat\beta_1)$
+1. Compute the sample means $\bar{x}$ and $\bar{y}$.
+2. Create the centered variables $x_i^c=x_i-\bar{x}$ and $y_i^c=y_i-\bar{y}$; save them as `xc` and `yc`.
+3. Verify numerically that $\sum_i x_i^c=0$ and $\sum_i y_i^c=0$.
+4. Calculate
 
-Verify it matches `confint()`.
+$$
+\hat\beta_1=\frac{\sum_i(x_i-\bar{x})(y_i-\bar{y})}{\sum_i(x_i-\bar{x})^2}
+$$
 
-This R code should be written in the code chunk of the **Answer** section below. 
+and
 
-Save your confidence interval as a vector to `prob04`, with the lower bound of the confidence interval coming first. 
+$$
+\hat\beta_0=\bar{y}-\hat\beta_1\bar{x}.
+$$
+
+Save the estimates as `b1_hat` and `b0_hat`. Do not use `lm()` in this problem.
 
 **Answer:**
 
 ```{r, problem04}
-#prob04 <-
+# xc <-
+# yc <-
+# b1_hat <-
+# b0_hat <-
 ```
 
-***
+---
 
-**#5** 
+**#5**  
 
-**Problem:** 
+Estimate
 
-Test
+$$
+math4_i = \beta_0 + \beta_1 exppp_i + u_i
+$$
 
-$H_0: \beta_1 = 0 \quad vs \quad H_1: \beta_1 \neq 0$
+using `lm()` and save the fitted model as `prob05_model`.
 
-State the test statistic and p-value. Assign the values to `t_stat` and `p_two`.
+1. Check that the estimated intercept and slope match your calculations in Problem 4 (small differences from rounding are acceptable).
+2. Interpret the slope in context. What would be the predicted change in `math4` associated with a $500 increase in expenditures per pupil?
 
-This R code should be written in the code chunk of the **Answer** section below. 
+Save the written responses to parts 2 and 3 as a string to `prob05`.
 
 **Answer:**
 
 ```{r, problem05}
-#t_stat <-
-#p_two <-
+# prob05_model <-
+# prob05 <-
 ```
 
-***
+---
 
-**#6** 
+**#6**  
 
-**Problem:** 
+Using `prob05_model`:
 
-a) Now test $H_0: \beta_1 \le 0 \quad vs \quad H_1: \beta_1 > 0$
+1. Calculate the fitted values and residuals; save them as `yhat` and `uhat`.
+2. Check numerically that the sample mean of the residuals is approximately zero.
+3. Identify the school with the largest absolute residual. Report its observed value for `math4`, fitted value for `math4`, residual, and value of `exppp`.
+4. Explain what the sign of that residual means.
 
-Manually compute the one-sided p-value. Assign the value to `p_one`.
-
-b) Explain why it differs from the two-sided case.
-
-Assign your response to this question as a string to `prob06`.
-
-This R code should be written in the code chunk of the **Answer** section below. 
+Save the requested school information as `prob06_school` and your explanation as `prob06`.
 
 **Answer:**
 
 ```{r, problem06}
-#p_one <-
-#prob06 <-
+# yhat <-
+# uhat <-
+# prob06_school <-
+# prob06 <-
 ```
 
-
-***
-
+---
 
 **#7** 
 
-**Problem:** Using your estimated level model from Question 2:
+For `prob05_model`, calculate the following manually from `math4`, `yhat`, and `uhat`:
 
-a) Compute the predicted change in `math4` if `exppp` increases by **$500**. Save this answer to `change_500`.
+$$
+TSS=\sum_i(y_i-\bar{y})^2, \qquad
+ESS=\sum_i(\hat{y}_i-\bar{y})^2, \qquad
+SSR=\sum_i\hat{u}_i^2,
+$$
 
-b) Compute the predicted change if `exppp` **decreases** by **$1,000**. Save this answer to `change_minus_1000`.
+$$
+R^2=1-\frac{SSR}{TSS}, \qquad
+SER=\sqrt{\frac{SSR}{n-2}}.
+$$
 
-b) Explain whether linearity is a reasonable approximation over this range. Save this answer as a string to `prob07`.**
+1. Save these five values in a named vector called `prob07_fit`. Put them in the order: $TSS, ESS, SSR, R^2, SER$.
+2. Interpret $R^2$ and the SER in context. Be precise about their units. Make sure your $R^2$ matches the value reported by your model `summary()`.
 
+Save your interpretation as `prob07`.
 
-This R code should be written in the code chunk of the **Answer** section below. 
-
+**Answer:**
 
 ```{r, problem07}
-#change_500 <-
-#change_minus_1000 <-
-#prob07 <-
+# prob07_fit <-
+# prob07 <-
 ```
 
-***
+---
 
-**#8** 
+**#8**  
 
-**Problem:** 
+Estimate the level-log model
 
-Estimate
+$$
+math4_i=\beta_0+\beta_1\ln(exppp_i)+u_i
+$$
 
-$math4 = \beta_0 + \beta_1 \ln(exppp) + u$
+and save it as `prob08_model`.
 
-a) Compute the predicted change in `math4` for a 10% increase in spending. Save this to `pred_10pct`**
+1. Interpret the estimated slope as a semi-elasticity.
+2. Compute the predicted change in `math4` for a 10% increase in spending using the exact log change $\ln(1.10)$; save it as `prob08_change`.
+3. Compare the $R^2$ and residual standard error of the two models. Which functional form do you prefer for prediction, and why?
 
-b) Interpret $\hat\beta_1$ as a semi-elasticity. Compare this prediction to Question 4. Save this answer as a string to `prob08`.
-
-This R code should be written in the code chunk of the **Answer** section below. 
+Save your written response as `prob08`.
 
 **Answer:**
 
 ```{r, problem08}
-#pred_10pct <-
-#prob08 <-
+# prob08_model <-
+# prob08_change <-
+# prob08 <-
 ```
 
+---
 
-***
+**#9**  
 
-**#9** 
+Suppose the goal is to estimate the **causal effect** of per-pupil spending on fourth-grade math performance using the simple regression in Problem 5.
 
-**Problem:** 
+In 6–8 sentences:
 
-Compare the **level** and **log** models using:**
+1. State the conditional mean assumption needed for a causal interpretation.
+2. Explain why the percentage of students eligible for free or reduced-price lunch (`lunch`) might violate this assumption.
+3. Explain the likely direction of the resulting omitted-variable bias if high-poverty schools tend to have both higher spending needs and lower test scores for reasons not caused by spending.
+4. Distinguish a regression that is useful for prediction from one that identifies a causal effect.
 
-* $R^2$
-* Residual standard error
-* Economic interpretability
-
-Which model do you prefer and why? 
-
-This R code should be written in the code chunk of the **Answer** section below. Assign the answer as a string to `prob09`. 
+Save your response as a string named `prob09`.
 
 **Answer:**
 
 ```{r, problem09}
-#prob09 <-
+# prob09 <-
 ```
 
+---
 
-***
+**#10** . 
 
+The OLS slope can be written as
 
-**#10** 
+$$
+\hat\beta_1=\beta_1+
+\frac{\sum_i(x_i-\bar{x})u_i}{\sum_i(x_i-\bar{x})^2}.
+$$
 
-**Problem:** 
+In 6–8 sentences:
 
-In **5–7 sentences**, explain the relationship between:
+1. Use this expression to explain why $E(u_i\mid X_i)=0$ implies that $\hat\beta_1$ is unbiased.
+2. Explain why $\hat\beta_1$ varies from sample to sample even when $\beta_1$ is fixed.
+3. Explain how increasing the sample size generally affects the sampling distribution of $\hat\beta_1$.
+4. Distinguish unbiasedness from consistency.
 
-* confidence intervals
-* p-values
-* hypothesis tests
-
-Focus on how they provide equivalent information (e.g., CI-based rejection vs p-value-based rejection).
-
-This R code should be written as a string in the code chunk of the Answer section below. The string should be assigned to `prob10`.
+Save your response as a string named `prob10`.
 
 **Answer:**
 
-```{r, problem10}
-#prob10 <- 
+```{r problem-10}
+# prob10 <-
 ```
 
-
-***
