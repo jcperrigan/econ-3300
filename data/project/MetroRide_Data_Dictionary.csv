@@ -1,0 +1,65 @@
+file,variable,type,definition,coding_or_units
+customers.csv,customer_id,character,Unique fictional customer identifier,C#####
+customers.csv,home_market,character,Customer's primary MetroRide market,Five fictional markets
+customers.csv,signup_date,date,Date the customer created a MetroRide account,YYYY-MM-DD
+customers.csv,age_group,character,Customer age category,Categorical
+customers.csv,income_group,character,Estimated household income category,Categorical; some values missing
+customers.csv,home_area_type,character,Type of area surrounding the customer's home,Urban core; Inner suburb; Outer suburb
+customers.csv,acquisition_channel,character,Channel through which the customer originally joined,Categorical
+customers.csv,device,character,Customer mobile operating system,iOS or Android
+customers.csv,loyalty_member,integer,Whether customer belonged to MetroRide Plus before 2025,1=yes; 0=no
+customers.csv,prior_rides,integer,Completed MetroRide rides before 2025,Count
+customers.csv,prior_spend,double,Gross customer spending before 2025,USD
+customers.csv,prior_promotions_used,integer,Promotional offers used before 2025,Count
+customers.csv,days_since_last_ride,integer,Days between most recent pre-2025 ride and 2025-01-01,Days
+customers.csv,prior_avg_rating,double,Average rating submitted on earlier rides,1-5; some values missing
+customers.csv,prior_complaints,integer,Complaints filed before 2025,Count
+rides.csv,ride_id,character,Unique ride-request identifier,R######
+rides.csv,customer_id,character,Customer making the request,Joins to customers.csv
+rides.csv,request_date,date,Date of ride request,YYYY-MM-DD
+rides.csv,request_hour,integer,Hour when ride was requested,0-23
+rides.csv,day_of_week,character,Day when ride was requested,Monday-Sunday
+rides.csv,weekend,integer,Whether request occurred Saturday or Sunday,1=yes; 0=no
+rides.csv,market,character,Market in which ride was requested,Five fictional markets
+rides.csv,trip_type,character,Primary trip category,Airport; Commute; Leisure; Errand; Business
+rides.csv,distance_miles,double,Estimated trip distance,Miles
+rides.csv,estimated_duration_min,double,Duration displayed before booking,Minutes
+rides.csv,standard_estimated_wait_min,double,Displayed wait for ordinary pickup,Minutes
+rides.csv,priority_eligible,integer,Whether Priority Pickup was displayed,1=yes; 0=no
+rides.csv,priority_estimated_wait_min,double,Displayed Priority Pickup wait,Minutes; blank if ineligible
+rides.csv,priority_surcharge,double,Randomly varied Priority Pickup surcharge,USD; blank if ineligible
+rides.csv,priority_selected,integer,Whether customer selected Priority Pickup,1=yes; 0=no
+rides.csv,temperature_f,double,Approximate temperature at request time,Degrees Fahrenheit
+rides.csv,rain,integer,Rain at request time,1=yes; 0=no
+rides.csv,snow,integer,Snow at request time,1=yes; 0=no
+rides.csv,high_demand,integer,MetroRide high-demand indicator,1=yes; 0=no
+rides.csv,service_disruption,integer,Localized dispatch disruption active in market that day,1=yes; 0=no
+rides.csv,surge_multiplier,double,Fare multiplier applied during high demand,1.00 means no surge
+rides.csv,quoted_fare,double,Standard fare displayed before discounts and Priority fee,USD
+rides.csv,discount_amount,double,Ordinary ride discount applied,USD
+rides.csv,amount_paid,double,Total amount paid for completed request including Priority fee,USD; zero if not completed
+rides.csv,completed,integer,Whether requested ride was completed,1=yes; 0=no
+rides.csv,customer_cancelled,integer,Whether customer cancelled the request,1=yes; 0=no
+rides.csv,driver_cancelled,integer,Whether driver cancelled the request,1=yes; 0=no
+rides.csv,actual_wait_min,double,Observed time until pickup or cancellation,Minutes
+rides.csv,actual_duration_min,double,Observed trip duration or last expected duration if cancelled,Minutes
+rides.csv,driver_id,character,Fictional driver identifier,D####
+rides.csv,driver_experience_months,integer,Driver's experience with MetroRide before request,Months
+rides.csv,driver_rating_before_ride,double,Driver's average rating before request,1-5
+rides.csv,vehicle_quality,character,MetroRide vehicle category,Standard; Comfort; Premium
+rides.csv,customer_rating,integer,Rating submitted after completed ride,1-5; blank if no rating
+rides.csv,complaint,integer,Whether customer filed a complaint about request,1=yes; 0=no
+marketing_experiment.csv,campaign_id,character,Campaign identifier,WINBACK_2025_06
+marketing_experiment.csv,customer_id,character,Randomized customer identifier,Joins to customers.csv
+marketing_experiment.csv,assignment_date,date,Campaign assignment date,YYYY-MM-DD
+marketing_experiment.csv,treatment_group,character,Randomly assigned campaign condition,Five conditions including Control
+marketing_experiment.csv,offer_value,double,Nominal value associated with assigned offer,USD; percentage offer uses expected nominal value
+marketing_experiment.csv,message_type,character,Marketing message emphasis,No message for control
+marketing_experiment.csv,offer_opened,integer,Whether customer opened campaign message,1=yes; 0=no
+marketing_experiment.csv,booked_within_30d,integer,Whether customer booked within 30 days after assignment,1=yes; 0=no
+marketing_experiment.csv,rides_within_30d,integer,Rides booked within 30-day follow-up window,Count
+marketing_experiment.csv,gross_spend_within_30d,double,Gross customer spending during follow-up,USD
+marketing_experiment.csv,offer_redeemed,integer,Whether assigned financial offer was redeemed,1=yes; 0=no
+marketing_experiment.csv,promotion_cost,double,Promotion cost incurred by MetroRide,USD
+marketing_experiment.csv,net_revenue_within_30d,double,MetroRide revenue share less promotion cost,USD
+marketing_experiment.csv,retained_within_60d,integer,Whether customer used MetroRide in the subsequent retention window,1=yes; 0=no
