@@ -297,7 +297,7 @@ Save your response as a string named `prob10`.
 
 **Answer:**
 
-```{r problem-10}
+```{r, problem10}
 # prob10 <-
 ```
 
