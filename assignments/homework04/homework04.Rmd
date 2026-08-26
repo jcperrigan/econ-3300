@@ -13,7 +13,7 @@ output:
 knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
 ```
 
-# Homework03
+# Homework04
 
 Grading Rubric (per question):  
 2 points if complete and correct  
@@ -113,6 +113,12 @@ $$
 **Answer:**
 
 ```{r, problem02}
+# y0_mean <-
+# n0 <-
+# s0 <-
+# y1_mean <-
+# n1 <-
+# s1 <-
 # prob02_se <-
 ```
 
@@ -120,7 +126,7 @@ $$
 
 **#3**  
 
-Using the standard error calculated in problem 2, test
+Using the standard error calculated in problem 2 and the $\beta_1$ from the model in problem 1, test
 
 $$
 H_0:\beta_1=0
@@ -254,12 +260,13 @@ and save it as `prob08_model`.
 2. Test $H_0:\beta_1=0$ against $H_1:\beta_1\neq0$ at the 5% level.
 3. Construct a 95% confidence interval for $\beta_1$.
 
-Save your confidence interval to `prob08_conf` and your explanation as `prob08`.
+Save your confidence interval to `prob08_conf` and your slope interpretation as `prob08`.
 
 **Answer:**
 
 ```{r, problem08}
-# prob08_conf <-
+# prob08_model <-
+# prob08_ci <-
 # prob08 <-
 ```
 
@@ -272,7 +279,7 @@ Using the model from question 8,
 1. Calculate the predicted difference in birth weight associated with smoking 10 additional cigarettes per day.
 2. Explain one reason the estimated association should not automatically be interpreted as a causal effect.
 
-Save the confidence interval as the predicted difference as `prob09_change`, and your written response as `prob09`.
+Save the predicted change as `prob09_change`, and your written response as `prob09`.
 
 **Answer:**
 
