@@ -1,0 +1,368 @@
+---
+title: "In-Class Activity: Multiple Regression and Inference"
+output: 
+  html_document:
+    toc: yes
+    toc_depth: 2
+    df_print: kable
+    highlight: tango
+    includes:
+      in_header: wcag-overrides.html
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+# Learning goals
+
+By the end of this activity, you should be able to:
+
+- interpret a coefficient in a multiple regression using “holding other included variables constant”;
+- explain how omitted-variable bias can change a coefficient;
+- compare $R^2$ and adjusted $R^2$;
+- conduct individual t-tests and construct confidence intervals;
+- write a joint null hypothesis;
+- distinguish restricted and unrestricted models; and
+- calculate and interpret an F-test for joint significance.
+
+
+# 1. Set up and explore the data
+
+We will use `wage1` from the `wooldridge` package. Each observation represents one worker. The variables of interest are:
+
+- `wage`: average hourly earnings;
+- `lwage`: natural log of hourly earnings;
+- `educ`: years of education;
+- `exper`: years of potential labor-market experience;
+- `tenure`: years with the current employer; and
+- `female`: 1 if the worker is a woman and 0 otherwise.
+
+```{r packages}
+library(wooldridge)
+library(tidyverse)
+library(knitr)
+```
+
+```{r inspect-data}
+data("wage1")
+
+# Open the documentation and inspect the main variables of interest
+
+# Check sample size, missing values, and descriptive statistics
+
+```
+
+1. What is the unit of observation? Which variables are continuous, and which is binary?
+
+
+
+2. Before estimating anything, predict the sign of each slope coefficient in
+
+
+$$
+lwage_i=\beta_0+\beta_1 educ_i+\beta_2 exper_i+
+\beta_3 tenure_i+\beta_4 female_i+u_i.
+$$
+
+
+
+# 2. Visualize selected relationships
+
+Create two plots:
+
+1. a scatterplot of `educ` and `lwage` with a fitted line; and
+2. a boxplot of `lwage` by gender.
+
+Include informative labels and alt text.
+
+```{r education-plot, fig.alt="Scatterplot of log hourly earnings against years of education with a fitted linear regression line."}
+# Education and log-wage plot
+
+```
+
+
+```{r gender-plot, fig.alt="Side-by-side boxplots comparing log hourly earnings for men and women in the wage sample."}
+# Create a labeled gender factor and make the boxplot
+
+```
+
+3. What do the plots suggest about the relationships? Why can neither plot show the partial relationship between a predictor and earnings?
+
+
+
+
+
+# 3. From simple to multiple regression
+
+Estimate these models:
+
+$$
+\text{Model 1: } lwage_i=\beta_0+\beta_1 educ_i+u_i
+$$
+
+$$
+\text{Model 2: } lwage_i=\beta_0+\beta_1 educ_i+\beta_2 exper_i+
+\beta_3 tenure_i+\beta_4 female_i+u_i.
+$$
+
+```{r estimate-models}
+# Estimate the simple model as model_1
+
+# Estimate the multiple regression as model_2
+
+# Display both summaries
+
+```
+
+4. Write the fitted equation for Model 2.
+
+
+
+5. Interpret the coefficients on `educ`, `tenure`, and `female`. Use exact percentage transformations where appropriate:
+
+$$
+100(e^{\widehat\beta}-1).
+$$
+
+```{r exact-percentages}
+# Calculate exact percentages for educ, tenure, and female
+
+```
+
+
+
+
+
+6. Compare the education coefficient across Models 1 and 2. Give a plausible omitted-variable-bias explanation for the change, but do not claim that the multiple-regression estimate is automatically causal.
+
+
+
+
+7. For an omitted variable $Z$ to bias the education coefficient, what two conditions must hold?
+
+
+
+
+# 4. Fitted values, residuals, and model fit
+
+Create a prediction for a worker with 16 years of education, 10 years of experience, 5 years of tenure, and `female = 1`. Report predicted log wage and predicted hourly wage.
+
+```{r prediction}
+new_worker <- tibble(educ = 16, exper = 10, tenure = 5, female = 1)
+
+# Add predicted lwage and wage
+
+```
+
+8. Interpret the prediction. Why should you avoid describing it as the worker’s guaranteed wage?
+
+
+
+
+Compare $R^2$, adjusted $R^2$, residual standard error, AIC, and BIC.
+
+```{r model-fit}
+# Create a compact model-fit table
+
+```
+
+9. Why must Model 2’s $R^2$ be **at least as large** as Model 1’s? Why might adjusted $R^2$ fall after adding a variable?
+
+
+
+
+10. Does the model with the largest $R^2$ necessarily have the best causal specification? Explain.
+
+
+
+
+
+
+# 5. Individual inference in multiple regression
+
+For an individual coefficient,
+
+$$
+t=\frac{\widehat\beta_j-\beta_{j,0}}
+{SE(\widehat\beta_j)}.
+$$
+
+Test $H_0:\beta_{tenure}=0$ against $H_1:\beta_{tenure}\neq0$ by extracting the estimate and conventional standard error from Model 2 and calculating the t-statistic and two-sided p-value.
+
+```{r tenure-test}
+tenure_estimate <- # coefficient estimate
+tenure_se <- # conventional standard error
+tenure_df <- # residual degrees of freedom
+tenure_t <- # t-statistic
+tenure_p <- # two-sided p-value
+
+c(estimate = tenure_estimate, standard_error = tenure_se,
+  t = tenure_t, df = tenure_df, p_value = tenure_p)
+```
+
+11. State the decision at $\alpha=0.05$ and interpret the result in context.
+
+
+
+
+Construct 95% confidence intervals for every Model 2 coefficient.
+
+```{r coefficient-cis}
+# Use confint()
+
+```
+
+12. Interpret the interval for `educ`. Which individual null hypotheses $H_0:\beta_j=0$ are rejected at the 5% level?
+
+
+
+# 6. Why an F-test?
+
+Suppose we want to know whether labor-market history contributes to the model after controlling for education and gender. The joint hypotheses are
+
+$$
+H_0:\beta_{exper}=0 \text{ AND } \beta_{tenure}=0
+$$
+
+$$
+H_1:\beta_{exper}\neq0 \text{ OR } \beta_{tenure}\neq0.
+$$
+
+13. How many restrictions are in the null? What does “OR” in the alternative mean?
+
+
+
+
+14. Why not just conduct two separate t-tests at $\alpha=0.05$ and reject the joint null if either is significant?
+
+
+
+The **unrestricted model** includes all variables:
+
+$$
+lwage_i=\beta_0+\beta_1 educ_i+\beta_2 exper_i+
+\beta_3 tenure_i+\beta_4 female_i+u_i.
+$$
+
+The **restricted model** imposes the null by removing `exper` and `tenure`:
+
+$$
+lwage_i=\beta_0+\beta_1 educ_i+\beta_4 female_i+u_i.
+$$
+
+15. Explain why Model 2 is unrestricted and the smaller model is restricted. Which model can never have the larger residual sum of squares?
+
+
+
+
+# 7. Calculate the partial F-test by hand
+
+Use the residual sum of squares (SSR) form:
+
+$$
+F=\frac{(SSR_R-SSR_U)/q}{SSR_U/(n-k_U-1)}
+\sim F(q,n-k_U-1),
+$$
+
+where:
+
+- $SSR_R$ is the restricted-model residual sum of squares;
+- $SSR_U$ is the unrestricted-model residual sum of squares;
+- $q$ is the number of restrictions;
+- $k_U$ is the number of slopes in the unrestricted model; and
+- $n-k_U-1$ is the unrestricted model’s residual degrees of freedom.
+
+```{r partial-f-test}
+restricted_model <- # estimate the model implied by H0
+unrestricted_model <- model_2
+
+SSR_R <- # restricted residual sum of squares
+SSR_U <- # unrestricted residual sum of squares
+q <- # number of restrictions
+df_U <- # unrestricted residual degrees of freedom
+
+partial_F <- # calculate the F-statistic
+partial_p <- # right-tail p-value using pf()
+partial_critical <- # 5% critical value using qf()
+
+c(F = partial_F, numerator_df = q, denominator_df = df_U,
+  critical_value = partial_critical, p_value = partial_p)
+```
+
+16. State the decision and conclusion in context. Be clear about what's held constant.
+
+
+
+Check the calculation by comparing the nested models.
+
+```{r verify-partial-f}
+# Use anova(restricted_model, unrestricted_model)
+
+```
+
+17. Match every element of the ANOVA comparison to the hand calculation: $q$, $SSR_R-SSR_U$, $F$, and the p-value.
+
+
+
+
+18. If the partial F-test rejects, does that prove both coefficients are individually nonzero? Explain why/ why not.
+
+
+
+
+
+# 8. The overall F-test
+
+The F-statistic in `summary(model_2)` tests
+
+$$
+H_0:\beta_{educ}=\beta_{exper}=\beta_{tenure}=\beta_{female}=0.
+$$
+
+19. What is the restricted model for this test? Extract the overall F-statistic and its two degrees of freedom, then calculate its p-value.
+
+```{r overall-f-test}
+overall_f <- summary(model_2)$fstatistic
+
+# Display F, numerator df, denominator df, and p-value
+
+```
+
+
+
+20. How does the overall F-test answer a different question from the partial F-test in Section 7?
+
+
+
+
+# 9. Multicollinearity and specification
+
+Inspect correlations among the continuous regressors.
+
+```{r correlations}
+# Correlation matrix for educ, exper, and tenure
+
+```
+
+21. What happens to standard errors when regressors don't have a lot of independent variation? Does multicollinearity bias OLS coefficients?
+
+
+
+
+22. A researcher keeps adding variables just because they increase $R^2$. Identify two problems with this approach.
+
+
+
+# 10. Final check
+
+In 5–7 sentences, summarize the Model 2 results. Include:
+
+- one partial-effect interpretation;
+- one individual inference result;
+- the partial F-test conclusion;
+- the overall F-test conclusion; and
+- one limitation affecting causal interpretation.
+
+
+

@@ -1,0 +1,277 @@
+---
+title: "ECON-3300"
+output: 
+  html_document:
+    toc: yes
+    toc_depth: 2
+    df_print: kable
+    highlight: tango
+    includes:
+      in_header: wcag-overrides.html
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+```
+
+# Homework05
+
+Grading Rubric (per question):  
+2 points if complete and correct  
+0 points otherwise 
+
+
+## Retrieving your work
+
+This and all future homework .Rmd files are written in Markdown. The .Rmd file can be rendered as an .html file for easier viewing. 
+
+Once you have opened the .Rmd file, you may begin writing your answers beneath each problem. Do not remove any of the original problems from the file, because that makes it more difficult for the me to grade your assignment. 
+
+
+## Submitting your work
+
+When you upload your files to Canvas, you are to submit ***two*** files:
+
+a. Your reproducible document file (.Rmd) which should be saved as homework##-ID.Rmd. For example, my homework01 file would be saved as homework01-jperrigan.Rmd.
+
+b. Your rendered reproducible document file (.html) which should be saved as homework##-ID.html. For example, my homework01 file would be saved as homework01-jperrigan.html.
+
+Your ID is your Canvas username. It is also the text before the "@" symbol in your UNO email address.
+
+You have an unlimited number of submissions, but only the  latest submission will be viewed and graded. **Proper means that the file is correctly named and formatted. Latest means that the file is the most recent submission prior to the deadline. Remember the .Rmd file needs to render properly to .html before submitting.** 
+
+
+***
+
+All students are expected to complete all problems. If any problem asks you a particular question, be sure to answer it completely (with code, written sentences, or both).
+
+***Do not change anything in this file above the double line. Doing so will prevent your homework from being graded.***
+
+***
+***
+
+We will use the `gpa2` dataset from the `wooldridge` package. The dataset contains information about students at a large U.S. university. Our outcome variable is cumulative college GPA (`colgpa`). Use `?gpa2` to review the definitions and units of all variables before beginning.
+
+```{r packages}
+library(tidyverse)
+library(wooldridge)
+
+data("gpa2")
+?gpa2
+```
+
+Make sure to also load `reporting.R` for your model summaries. This R script should be saved in the same folder as your homework.
+
+```{r reporting}
+source("reporting.R")
+```
+
+Throughout the assignment, use the following multiple regression as the full model:
+
+$$
+colgpa_i = \beta_0 + \beta_1 sat_i + \beta_2 hsperc_i +
+\beta_3 tothrs_i + \beta_4 female_i + \beta_5 athlete_i + u_i.
+$$
+
+***
+
+**#1**
+
+**Problem:**
+
+1. Estimate the full model above and save it as `full_model`. Report the regression results using the model-summary function from `reporting.R`.
+2. Interpret the estimated coefficients on `sat` and `hsperc`, including their units and holding the other regressors constant.
+
+Assign your written answer to `prob01` as a string.
+
+**Answer:**
+
+```{r, problem01}
+# full_model <-
+# prob01 <-
+```
+
+***
+
+**#2**
+
+**Problem:**
+
+1. Estimate a simple regression of `colgpa` on `sat` and save it as `simple_model`. Compare the `sat` coefficient with its estimate in `full_model`.
+2. Use omitted-variable-bias logic to explain why the two estimates may be different. Focus on `hsperc`, remembering that a lower high-school percentile indicates a better class rank.
+
+Assign your written answer to `prob02` as a string.
+
+**Answer:**
+
+```{r, problem02}
+# simple_model <-
+# prob02 <-
+```
+
+***
+
+**#3**
+
+**Problem:**
+
+1. Using `full_model`, calculate the predicted change in college GPA when SAT increases by 100 points and high-school percentile decreases by 10 points, with all other regressors held constant. Save the result as `pred_change`.
+2. Show the calculation and explain why both coefficient effects enter the predicted change.
+
+Assign your written answer to `prob03` as a string.
+
+**Answer:**
+
+```{r, problem03}
+# pred_change <-
+# prob03 <-
+```
+
+***
+
+**#4**
+
+**Problem:**
+
+1. Record the $R^2$ and adjusted $R^2$ from `simple_model` and `full_model` in a two-row data frame named `model_fit`.
+2. Explain why $R^2$ **can't** fall when regressors are added and why adjusted $R^2$ **can** fall.
+
+Assign your written answer to `prob04` as a string.
+
+**Answer:**
+
+```{r, problem04}
+# model_fit <-
+# prob04 <-
+```
+
+***
+
+**#5**
+
+**Problem:**
+
+Use `full_model` to test
+
+$$
+H_0: \beta_{athlete}=0 \qquad \text{against} \qquad H_1: \beta_{athlete}\neq 0
+$$
+
+at the 5% significance level.
+
+1. Save the t statistic and p-value as a named vector called `athlete_test`.
+2. State your statistical decision and interpret the result in context. Do not automatically describe the estimate as causal.
+
+Assign your written answer to `prob05` as a string.
+
+**Answer:**
+
+```{r, problem05}
+# athlete_test <-
+# prob05 <-
+```
+
+***
+
+**#6**
+
+**Problem:**
+
+1. Construct a 95% confidence interval for the coefficient on `tothrs` using `full_model`. Save its lower and upper endpoints as a named vector called `tothrs_ci`.
+2. Interpret the interval in context and explain what it implies about a two-sided test of $H_0:\beta_{tothrs}=0$ at the 5% level.
+
+Assign your written answer to `prob06` as a string.
+
+**Answer:**
+
+```{r, problem06}
+# tothrs_ci <-
+# prob06 <-
+```
+
+***
+
+
+**#7**
+
+**Problem:**
+
+Researchers claim that, holding the other regressors constant, a 100-point increase in SAT score is associated with a 0.10-point increase in college GPA. Test this claim using a two-sided hypothesis test at the 5% significance level.
+
+$$
+H_0: \beta_{sat100}=0.10 \qquad \text{against} \qquad H_1: \beta_{sat100}\neq 0.10
+$$
+
+using `full_model` and a 5% significance level.
+
+1. Create `sat100 = sat / 100`, re-estimate the full model using `sat100`, and calculate the t statistic for $H_0:\beta_{sat100}=0.10$. Save it as `sat_t`.
+2. Calculate the two-sided p-value, save it as `sat_p`, and state your conclusion in context.
+
+Assign your written answer to `prob07` as a string.
+
+**Answer:**
+
+```{r, problem07}
+# sat_t <-
+# sat_p <-
+# prob07 <-
+```
+
+***
+
+**#8**
+
+**Problem:**
+
+Consider the joint null hypothesis
+
+$$
+H_0: \beta_{tothrs}=0 \text{ and } \beta_{athlete}=0.
+$$
+
+1. Estimate the restricted model implied by $H_0$ and save it as `restricted_model`. The unrestricted model is `full_model`.
+2. Save the restricted and unrestricted residual sums of squares, the number of restrictions $q$, and the unrestricted residual degrees of freedom in a named vector called `f_inputs`.
+
+**Answer:**
+
+```{r, problem08}
+# restricted_model <-
+# f_inputs <-
+```
+
+***
+
+**#9**
+
+**Problem:**
+
+1. Using the values from Problem 8, calculate the F statistic by hand and save it as `partial_f`. Verify your calculation using `anova(restricted_model, full_model)`.
+2. State the joint-test decision at the 5% significance level and explain what the result means. Be explicit about the word **jointly**.
+
+Assign your written answer to `prob09` as a string.
+
+**Answer:**
+
+```{r, problem09}
+# partial_f <-
+# prob09 <-
+```
+
+***
+
+**#10**
+
+**Problem:**
+
+1. State the null hypothesis tested by the overall F statistic reported for `full_model`, and use the model output to reach a conclusion at the 5% significance level.
+2. Explain how the overall F-test differs from the partial F-test in Problem 9 and why separate t-tests are not a substitute for a joint F-test.
+
+Assign your written answer to `prob10` as a string.
+
+**Answer:**
+
+```{r, problem10}
+# prob10 <-
+```
+
+***

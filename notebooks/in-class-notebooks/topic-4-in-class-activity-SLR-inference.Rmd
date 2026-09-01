@@ -1,0 +1,332 @@
+---
+title: "In-Class Activity: Inference in Simple Linear Regression"
+output: 
+  html_document:
+    toc: yes
+    toc_depth: 2
+    df_print: kable
+    highlight: tango
+    includes:
+      in_header: wcag-overrides.html
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+# Learning goals
+
+By the end of this activity, you should be able to:
+
+- explain why regression estimates vary across samples;
+- interpret a regression with a binary explanatory variable;
+- conduct hypothesis tests about zero and nonzero coefficient values;
+- construct and interpret confidence intervals;
+- connect a binary-regressor model to a difference in group means; and
+- compare conventional and unequal-variance standard errors.
+
+
+# 1. Set up and inspect the data
+
+We will use `wage2` from the `wooldridge` package. Each observation represents one worker. Our focal variables are:
+
+- `wage`: monthly earnings in dollars;
+- `lwage`: the natural log of monthly earnings;
+- `educ`: years of education; and
+- `urban`: an indicator equal to 1 if the worker lives in an urban area and 0 otherwise.
+
+```{r packages}
+library(wooldridge)
+library(tidyverse)
+library(knitr)
+```
+
+```{r inspect-data}
+data("wage2")
+
+# Open the documentation and inspect the focal variables
+
+# Check the sample size and missing values
+
+```
+
+1. What is the unit of observation? What are the units of `wage`, `lwage`, and `educ`?
+
+
+
+2. Use a frequency table to verify how `urban` is coded. Which category is the reference group when `urban = 0`?
+
+```{r inspect-urban}
+# Create a frequency table for urban
+
+```
+
+
+
+
+# 2. Compare the two groups
+
+Create a labeled factor called `urban_status`, then calculate the sample size, mean log earnings, standard deviation, and variance for each group.
+
+```{r group-summary}
+wage2 <- wage2 |>
+  mutate(
+    urban_status = # label 0 as "Non-urban" and 1 as "Urban"
+  )
+
+# Create the group summary
+
+```
+
+3. Which group has the larger mean log earnings? Calculate the raw difference as urban mean minus non-urban mean.
+
+
+
+
+Create a boxplot comparing log earnings across the groups. Use informative labels, accessible colors, and alt text.
+
+```{r boxplot, fig.alt="Side-by-side boxplots comparing log monthly earnings for workers living in non-urban and urban areas."}
+# Create the boxplot here
+
+```
+
+4. Describe the centers, spreads, and overlap. Can this plot by itself establish a population difference?
+
+
+
+
+
+
+# 3. Connect a binary regressor to group means
+
+Consider the population model
+
+$$
+lwage_i=\beta_0+\beta_1 urban_i+u_i.
+$$
+
+Under the zero conditional mean assumption,
+
+$$
+E(lwage_i\mid urban_i=0)=\beta_0
+$$
+
+and
+
+$$
+E(lwage_i\mid urban_i=1)=\beta_0+\beta_1.
+$$
+
+So
+
+$$
+\beta_1=E(lwage_i\mid urban_i=1)-E(lwage_i\mid urban_i=0).
+$$
+
+5. Interpret $\beta_0$ and $\beta_1$ in this application.
+
+
+
+```{r fit-model}
+# Estimate lwage on urban and save the model as urban_model
+
+# Display the model summary
+
+```
+
+6. Check that the intercept equals one group mean and the slope equals the difference in group means.
+
+```{r verify-means}
+# Calculate the fitted mean for urban = 0 and urban = 1 from the coefficients
+
+# Compare them with the observed group means
+
+```
+
+
+
+7. Convert the slope from log points to an exact percentage difference using
+
+$$
+100(e^{\widehat\beta_1}-1).
+$$
+
+```{r percent-difference}
+# Calculate the approximate and exact percentage differences
+
+```
+
+> **Interpretation:**
+
+
+
+# 4. Construct a hypothesis test by hand
+
+Test
+
+$$
+H_0:\beta_1=0
+\qquad \text{against} \qquad
+H_1:\beta_1\neq0.
+$$
+
+Assuming **equal population variances**, the pooled variance and conventional standard error are
+
+$$
+s_p^2=\frac{(n_1-1)s_1^2+(n_0-1)s_0^2}{n_1+n_0-2}
+$$
+
+and
+
+$$
+SE(\bar Y_1-\bar Y_0)=
+\sqrt{s_p^2\left(\frac{1}{n_1}+\frac{1}{n_0}\right)}.
+$$
+
+```{r test-by-hand}
+urban_group <- wage2 |> filter(urban == 1)
+nonurban_group <- wage2 |> filter(urban == 0)
+
+n_1 <- # urban sample size
+n_0 <- # non-urban sample size
+mean_1 <- # urban mean lwage
+mean_0 <- # non-urban mean lwage
+var_1 <- # urban variance of lwage
+var_0 <- # non-urban variance of lwage
+
+mean_difference <- # urban mean minus non-urban mean
+pooled_variance <- # pooled variance formula
+conventional_se <- # conventional standard error
+degrees_freedom <- # pooled-test degrees of freedom
+t_statistic <- # test H0: beta_1 = 0
+p_value <- # two-sided p-value using pt()
+
+c(estimate = mean_difference, standard_error = conventional_se,
+  t = t_statistic, df = degrees_freedom, p_value = p_value)
+```
+
+8. At $\alpha=0.05$, what is your decision? State the conclusion in context without saying that you “accept” the null.
+
+
+
+9. Explain the p-value in context. Begin with “If the null hypothesis were true...”
+
+
+
+
+10. Compare your estimate, standard error, t-statistic, and p-value with `summary(urban_model)`.
+
+
+
+
+# 5. Test nonzero null hypotheses
+
+Test $H_0:\beta_1=0.10$ and $H_0:\beta_1=0.20$, using a two-sided alternative in each case.
+
+```{r nonzero-nulls}
+null_values <- c(0.10, 0.20)
+
+# Calculate a t-statistic and two-sided p-value for each null value
+
+```
+
+11. What is your decision for each test at $\alpha=0.05$? Why can the same sample support different decisions for different null values?
+
+
+
+
+# 6. Construct confidence intervals
+
+```{r confidence-intervals}
+# Find the 90% and 95% critical values with qt()
+
+# Calculate both confidence intervals
+
+# Display them in a small table
+
+```
+
+12. Which interval is wider, and why?
+
+
+
+
+13. Interpret the 95% confidence interval. Then translate its endpoints into percentage differences.
+
+
+
+
+14. Use the 95% interval to evaluate $H_0:\beta_1=0$, $H_0:\beta_1=0.10$, and $H_0:\beta_1=0.20$. 
+
+
+
+
+```{r verify-ci}
+# Check the 90% and 95% intervals with confint()
+
+```
+
+# 7. Conventional versus unequal-variance inference
+
+An unequal-variance standard error for the group difference is
+
+$$
+SE_{unequal}=\sqrt{\frac{s_1^2}{n_1}+\frac{s_0^2}{n_0}}.
+$$
+
+```{r unequal-variance-test}
+unequal_se <- # unequal-variance standard error
+welch_df <- # Welch-Satterthwaite degrees of freedom
+welch_t <- # test H0: beta_1 = 0
+welch_p <- # two-sided p-value
+
+c(conventional_se = conventional_se,
+  unequal_variance_se = unequal_se,
+  welch_t = welch_t, welch_df = welch_df,
+  welch_p_value = welch_p)
+```
+
+15. Does the standard-error choice change the conclusion? Why should the method still be reported?
+
+
+
+```{r verify-t-tests}
+# Verify the pooled and Welch tests with t.test()
+
+```
+
+
+
+# 8. Statistical significance and causal language
+
+16. A classmate writes: “Living in an urban area causes monthly earnings to increase.” Rewrite the claim so it is supported by this analysis.
+
+
+
+
+17. Name two factors that could affect earnings and be systematically different between urban and non-urban workers. What would leaving them out mean for $E(u\mid urban)=0$?
+
+
+
+
+18. Is statistical significance the same as practical importance? What additional context would help you evaluate the size/ magnitude?
+
+
+
+# 9. Final synthesis
+
+In 4–6 sentences, summarize the estimated difference, uncertainty, hypothesis-test result, and one important limitation. Use percentage language and avoid causal language.
+
+
+
+# Optional extension: sampling variability
+
+Draw 500 bootstrap samples, estimate the urban coefficient in each, and plot its sampling distribution. Compare its center and standard deviation with the original estimate and conventional standard error.
+
+```{r bootstrap-extension, eval=FALSE}
+set.seed(8300)
+
+# Write the bootstrap simulation here
+
+```
+
