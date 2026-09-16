@@ -230,7 +230,7 @@ H_0: \beta_{tothrs}=0 \text{ and } \beta_{athlete}=0.
 $$
 
 1. Estimate the restricted model implied by $H_0$ and save it as `restricted_model`. The unrestricted model is `full_model`.
-2. Save the restricted and unrestricted residual sums of squares, the number of restrictions $q$, and the unrestricted residual degrees of freedom in a named vector called `f_inputs`.
+2. Save the unrestricted residual sum of squares, the restricted residual sum of squares, the number of restrictions $q$, the number of observations $n$, and the denominator degrees of freedom $df_{den} = n - k - 1$ in a named vector called `f_inputs`. (note: $k$ does not include the intercept). Save them in that order.
 
 **Answer:**
 
