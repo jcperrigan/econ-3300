@@ -28,7 +28,7 @@ By the end of this activity, you should be able to:
 
 # 1. Set up and inspect the data
 
-We will use `wage2` from the `wooldridge` package. Each observation represents one worker. Our focal variables are:
+We will use `wage2` from the `wooldridge` package. Each observation represents one worker. Our main variables of interest are:
 
 - `wage`: monthly earnings in dollars;
 - `lwage`: the natural log of monthly earnings;
@@ -41,10 +41,17 @@ library(tidyverse)
 library(knitr)
 ```
 
+I will be loading the `reporting.R` script. To do this, make sure to save the `reporting.R` file in the same folder as you have saved this in-class activity notebook.
+
+```{r}
+source("reporting.R")
+```
+
+
 ```{r inspect-data}
 data("wage2")
 
-# Open the documentation and inspect the focal variables
+# Open the documentation and inspect the variables
 
 # Check the sample size and missing values
 
@@ -68,6 +75,10 @@ data("wage2")
 
 Create a labeled factor called `urban_status`, then calculate the sample size, mean log earnings, standard deviation, and variance for each group.
 
+Note: these grouped statistics are much easier to do using `dplyr` (a package inside `tidyverse`)! this is much easier to do using dplyr! 
+
+[Click this link to check out some examples.](https://tavareshugo.github.io/r-intro-tidyverse-gapminder/06-grouped_operations_dplyr/index.html)
+
 ```{r group-summary}
 wage2 <- wage2 |>
   mutate(
@@ -76,7 +87,10 @@ wage2 <- wage2 |>
 
 # Create the group summary
 
+
 ```
+
+
 
 3. Which group has the larger mean log earnings? Calculate the raw difference as urban mean minus non-urban mean.
 
@@ -156,7 +170,7 @@ $$
 
 ```
 
-> **Interpretation:**
+**Interpretation:**
 
 
 
@@ -170,7 +184,7 @@ H_0:\beta_1=0
 H_1:\beta_1\neq0.
 $$
 
-Assuming **equal population variances**, the pooled variance and conventional standard error are
+Assuming equal population variances, the pooled variance and conventional standard error are
 
 $$
 s_p^2=\frac{(n_1-1)s_1^2+(n_0-1)s_0^2}{n_1+n_0-2}
