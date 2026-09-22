@@ -1,0 +1,717 @@
+---
+title: "In-Class Activity: Inference in Simple Linear Regression"
+output: 
+  html_document:
+    toc: yes
+    toc_depth: 2
+    df_print: kable
+    highlight: tango
+    includes:
+      in_header: wcag-overrides.html
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+# Learning goals
+
+By the end of this activity, you should be able to:
+
+- explain why regression estimates vary across samples;
+- interpret a regression with a binary explanatory variable;
+- conduct hypothesis tests about zero and nonzero coefficient values;
+- construct and interpret confidence intervals;
+- connect a binary-regressor model to a difference in group means; and
+- compare conventional and unequal-variance standard errors.
+
+
+# 1. Set up and inspect the data
+
+We will use `wage2` from the `wooldridge` package. Each observation represents one worker. Our main variables of interest are:
+
+- `wage`: monthly earnings in dollars;
+- `lwage`: the natural log of monthly earnings;
+- `educ`: years of education; and
+- `urban`: an indicator equal to 1 if the worker lives in an urban area and 0 otherwise.
+
+```{r packages}
+library(wooldridge)
+library(tidyverse)
+library(knitr)
+library(kableExtra)
+```
+
+```{r inspect-data}
+data("wage2")
+
+# Open the documentation and inspect the variables
+?wage2
+
+# Check the sample size and missing values
+wage2 |>
+  select(wage, lwage, educ, urban) |>
+  glimpse()
+
+
+wage2 |>
+  summarise(
+    `Sample size` = n(),
+    across(c(wage, lwage, educ, urban), ~ sum(is.na(.x)), .names = "missing_{.col}")
+  ) |>
+  rename(
+    `Missing wage values` = missing_wage,
+    `Missing log wage values` = missing_lwage,
+    `Missing education values` = missing_educ,
+    `Missing urban-status values` = missing_urban
+  ) |>
+  knitr::kable(
+    caption = "Sample size and missing values for variables used in the activity",
+    align = c("r", "r", "r", "r", "r")
+  ) |>
+  kableExtra::kable_styling(full_width = FALSE, position = "left") |>
+  kableExtra::row_spec(0, bold = TRUE)
+
+```
+
+1. What is the unit of observation? What are the units of `wage`, `lwage`, and `educ`?
+
+Each observation is one worker. wage is monthly earnings in dollars, lwage is its natural log, and educ is years of education.
+
+2. Use a frequency table to verify how `urban` is coded. Which category is the reference group when `urban = 0`?
+
+```{r inspect-urban}
+# Create an accessible frequency table for urban
+wage2 |>
+  mutate(
+    `Urban status` = case_when(
+      urban == 0 ~ "Non-urban",
+      urban == 1 ~ "Urban",
+      TRUE ~ "Missing"
+    )
+  ) |>
+  count(`Urban status`, name = "Number of workers") |>
+  mutate(
+    Percent = round(100 * `Number of workers` / sum(`Number of workers`), 1)
+  ) |>
+  knitr::kable(
+    caption = "Frequency distribution of workers by urban status",
+    col.names = c("Urban status", "Number of workers", "Percent of sample"),
+    align = c("l", "r", "r")
+  ) |>
+  kableExtra::kable_styling(full_width = FALSE, position = "left") |>
+  kableExtra::row_spec(0, bold = TRUE)
+
+
+```
+
+urban = 1 indicates an urban resident; urban = 0 indicates a non-urban resident and is the regression reference group.
+
+
+
+# 2. Compare the two groups
+
+Create a labeled factor called `urban_status`, then calculate the sample size, mean log earnings, standard deviation, and variance for each group.
+
+Note: these grouped statistics are much easier to do using `dplyr` (a package inside `tidyverse`)! this is much easier to do using dplyr! 
+
+[Click this link to check out some examples.](https://tavareshugo.github.io/r-intro-tidyverse-gapminder/06-grouped_operations_dplyr/index.html)
+
+```{r group-summary}
+wage2 <- wage2 |>
+  mutate(
+    urban_status = factor(
+      urban,
+      levels = c(0, 1),
+      labels = c("Non-urban", "Urban")
+    )
+  )
+
+# Create the group summary
+group_summary <- wage2 |>
+  group_by(urban_status) |>
+  summarise(
+    n = n(),
+    mean_lwage = mean(lwage),
+    sd_lwage = sd(lwage),
+    variance_lwage = var(lwage),
+    .groups = "drop"
+  )
+
+group_summary |>
+  rename(
+    `Urban status` = urban_status,
+    `Number of workers` = n,
+    `Mean log monthly earnings` = mean_lwage,
+    `Standard deviation of log monthly earnings` = sd_lwage,
+    `Variance of log monthly earnings` = variance_lwage
+  ) |>
+  mutate(
+    across(
+      c(
+        `Mean log monthly earnings`,
+        `Standard deviation of log monthly earnings`,
+        `Variance of log monthly earnings`
+      ),
+      ~ round(.x, 3)
+    )
+  ) |>
+  knitr::kable(
+    caption = "Summary statistics for log monthly earnings by urban status",
+    align = c("l", "r", "r", "r", "r")
+  ) |>
+  kableExtra::kable_styling(full_width = FALSE, position = "left") |>
+  kableExtra::row_spec(0, bold = TRUE)
+
+```
+
+
+
+3. Which group has the larger mean log earnings? Calculate the raw difference as urban mean minus non-urban mean.
+
+The urban group has the larger mean log earnings. The raw difference is 0.191 log points.
+
+
+Create a boxplot comparing log earnings across the groups. Use informative labels, accessible colors, and alt text.
+
+```{r boxplot, fig.alt="Side-by-side boxplots comparing log monthly earnings for workers living in non-urban and urban areas."}
+# Create the boxplot here
+
+ggplot(wage2, aes(x = urban_status, y = lwage, fill = urban_status)) +
+  geom_boxplot(show.legend = FALSE) +
+  scale_fill_manual(values = c("Non-urban" = "steelblue", "Urban" = "#E69F00")) +
+  labs(
+    title = "Log Monthly Earnings by Urban Status",
+    x = "Residence",
+    y = "Log of monthly earnings"
+  ) +
+  theme_minimal()
+
+```
+
+4. Describe the centers, spreads, and overlap. Can this plot by itself establish a population difference?
+
+Urban workers have a higher center, but the distributions overlap substantially. The plot alone cannot establish a population difference.
+
+
+
+
+
+# 3. Connect a binary regressor to group means
+
+Consider the population model
+
+$$
+lwage_i=\beta_0+\beta_1 urban_i+u_i.
+$$
+
+Under the zero conditional mean assumption,
+
+$$
+E(lwage_i\mid urban_i=0)=\beta_0
+$$
+
+and
+
+$$
+E(lwage_i\mid urban_i=1)=\beta_0+\beta_1.
+$$
+
+So
+
+$$
+\beta_1=E(lwage_i\mid urban_i=1)-E(lwage_i\mid urban_i=0).
+$$
+
+5. Interpret $\beta_0$ and $\beta_1$ in this application.
+
+$\beta_0$ is mean log earnings among non-urban workers. $\beta_1$ is urban mean log earnings minus non-urban mean log earnings.
+
+```{r fit-model}
+# Estimate lwage on urban and save the model as urban_model
+urban_model <- lm(lwage ~ urban, data = wage2)
+
+# Display the model summary as an accessible table
+broom::tidy(urban_model) |>
+  mutate(
+    term = dplyr::recode(
+      term,
+      `(Intercept)` = "Intercept: mean for non-urban workers",
+      urban = "Urban minus non-urban difference",
+      .default = term
+    ),
+    across(c(estimate, std.error, statistic), ~ round(.x, 3)),
+    p.value = if_else(
+      p.value < 0.001,
+      "<0.001",
+      format(round(p.value, 3), nsmall = 3)
+    )
+  ) |>
+  select(term, estimate, std.error, statistic, p.value) |>
+  knitr::kable(
+    caption = "Regression of log monthly earnings on urban status",
+    col.names = c(
+      "Model term",
+      "Coefficient estimate",
+      "Standard error",
+      "t statistic",
+      "p value"
+    ),
+    align = c("l", "r", "r", "r", "r")
+  ) |>
+  kableExtra::kable_styling(full_width = FALSE, position = "left") |>
+  kableExtra::row_spec(0, bold = TRUE)
+
+```
+
+6. Check that the intercept equals one group mean and the slope equals the difference in group means.
+
+```{r verify-means}
+# Calculate the fitted mean for urban = 0 and urban = 1 from the coefficients
+
+coefficient_means <- c(
+  nonurban = coef(urban_model)["(Intercept)"],
+  urban = coef(urban_model)["(Intercept)"] + coef(urban_model)["urban"]
+)
+
+
+
+# Compare them with the observed group means
+
+observed_means <- tapply(wage2$lwage, wage2$urban, mean)
+
+tibble(
+  `Urban status` = c("Non-urban", "Urban"),
+  `Mean calculated from model coefficients` = unname(coefficient_means),
+  `Observed group mean` = unname(observed_means)
+) |>
+  mutate(across(where(is.numeric), ~ round(.x, 3))) |>
+  knitr::kable(
+    caption = "Log monthly earnings means calculated from the model and observed in the sample",
+    align = c("l", "r", "r")
+  ) |>
+  kableExtra::kable_styling(full_width = FALSE, position = "left") |>
+  kableExtra::row_spec(0, bold = TRUE)
+
+```
+
+The intercept equals the non-urban mean. Adding the slope produces the urban mean, and the slope equals urban mean minus non-urban mean.
+
+7. Convert the slope from log points to an exact percentage difference using
+
+$$
+100(e^{\widehat\beta_1}-1).
+$$
+
+```{r percent-difference}
+# Calculate the approximate and exact percentage differences
+
+approximate_percent <- 100 * coef(urban_model)["urban"]
+exact_percent <- 100 * (exp(coef(urban_model)["urban"]) - 1)
+
+tibble(
+  Method = c("Approximate percentage difference", "Exact percentage difference"),
+  `Estimated percentage difference` = c(approximate_percent, exact_percent)
+) |>
+  mutate(`Estimated percentage difference` = round(`Estimated percentage difference`, 1)) |>
+  knitr::kable(
+    caption = "Approximate and exact urban–non-urban earnings differences",
+    align = c("l", "r")
+  ) |>
+  kableExtra::kable_styling(full_width = FALSE, position = "left") |>
+  kableExtra::row_spec(0, bold = TRUE)
+
+
+```
+
+**Interpretation:**
+
+Urban residence is associated with approximately 21% higher monthly earnings in this sample. This is an association, not a causal effect.
+
+
+# 4. Construct a hypothesis test by hand
+
+Test
+
+$$
+H_0:\beta_1=0
+\qquad \text{against} \qquad
+H_1:\beta_1\neq0.
+$$
+
+Assuming equal population variances, the pooled variance and conventional standard error are
+
+$$
+s_p^2=\frac{(n_1-1)s_1^2+(n_0-1)s_0^2}{n_1+n_0-2}
+$$
+
+and
+
+$$
+SE(\bar Y_1-\bar Y_0)=
+\sqrt{s_p^2\left(\frac{1}{n_1}+\frac{1}{n_0}\right)}.
+$$
+
+```{r test-by-hand}
+urban_group <- wage2 |> filter(urban == 1)
+nonurban_group <- wage2 |> filter(urban == 0)
+
+n_1 <- nrow(urban_group)
+n_0 <- nrow(nonurban_group)
+mean_1 <- mean(urban_group$lwage)
+mean_0 <- mean(nonurban_group$lwage)
+var_1 <- var(urban_group$lwage)
+var_0 <- var(nonurban_group$lwage)
+
+mean_difference <- mean_1 - mean_0
+pooled_variance <- ((n_1 - 1) * var_1 + (n_0 - 1) * var_0) /
+  (n_1 + n_0 - 2)
+conventional_se <- sqrt(pooled_variance * (1 / n_1 + 1 / n_0))
+degrees_freedom <- n_1 + n_0 - 2
+t_statistic <- mean_difference / conventional_se
+p_value <- 2 * pt(-abs(t_statistic), df = degrees_freedom)
+
+tibble(
+  `Coefficient estimate` = mean_difference,
+  `Standard error` = conventional_se,
+  `t statistic` = t_statistic,
+  `Degrees of freedom` = degrees_freedom,
+  `p value` = p_value
+) |>
+  mutate(
+    across(c(`Coefficient estimate`, `Standard error`, `t statistic`), ~ round(.x, 3)),
+    `Degrees of freedom` = round(`Degrees of freedom`, 0),
+    `p value` = if_else(
+      `p value` < 0.001,
+      "<0.001",
+      format(round(`p value`, 3), nsmall = 3)
+    )
+  ) |>
+  knitr::kable(
+    caption = "Hand-calculated two-sided test of no urban–non-urban difference",
+    align = c("r", "r", "r", "r", "r")
+  ) |>
+  kableExtra::kable_styling(full_width = FALSE, position = "left") |>
+  kableExtra::row_spec(0, bold = TRUE)
+```
+
+8. At $\alpha=0.05$, what is your decision? State the conclusion in context without saying that you “accept” the null.
+
+At $\alpha=0.05$, reject the null hypothesis of equal population mean log earnings. The sample provides statistically significant evidence of a difference.
+
+
+9. Explain the p-value in context. Begin with “If the null hypothesis were true...”
+
+If the null hypothesis were true, the p-value is the probability of obtaining a t-statistic at least as far from zero as the observed statistic, in either direction, through sampling variation under the model assumptions.
+
+
+
+10. Compare your estimate, standard error, t-statistic, and p-value with `summary(urban_model)`.
+
+The hand calculations match `summary(urban_model)` up to rounding because a binary-regressor OLS model with conventional standard errors is the pooled difference-in-means test.
+
+
+
+# 5. Test nonzero null hypotheses
+
+Test $H_0:\beta_1=0.10$ and $H_0:\beta_1=0.20$, using a two-sided alternative in each case.
+
+```{r nonzero-nulls}
+null_values <- c(0.10, 0.20)
+
+# Calculate a t-statistic and two-sided p-value for each null value
+
+nonzero_tests <- tibble(beta_null = null_values) |>
+  mutate(
+    t_statistic = (mean_difference - beta_null) / conventional_se,
+    p_value = 2 * pt(-abs(t_statistic), df = degrees_freedom),
+    decision_5_percent = if_else(p_value <= 0.05, "Reject", "Fail to reject")
+  )
+
+nonzero_tests |>
+  mutate(
+    beta_null = round(beta_null, 2),
+    t_statistic = round(t_statistic, 3),
+    p_value = if_else(
+      p_value < 0.001,
+      "<0.001",
+      format(round(p_value, 3), nsmall = 3)
+    )
+  ) |>
+  knitr::kable(
+    caption = "Two-sided hypothesis tests for nonzero values of the urban coefficient",
+    col.names = c(
+      "Null value for urban coefficient",
+      "t statistic",
+      "p value",
+      "Decision at the 5 percent level"
+    ),
+    align = c("r", "r", "r", "l")
+  ) |>
+  kableExtra::kable_styling(full_width = FALSE, position = "left") |>
+  kableExtra::row_spec(0, bold = TRUE)
+
+```
+
+11. What is your decision for each test at $\alpha=0.05$? Why can the same sample support different decisions for different null values?
+
+The table reports the decisions. Different proposed values lie at different standardized distances from the estimate, producing different t-statistics and p-values.
+
+
+
+
+# 6. Construct confidence intervals
+
+```{r confidence-intervals}
+# Find the 90% and 95% critical values with qt()
+t_critical_90 <- qt(0.95, df = degrees_freedom)
+t_critical_95 <- qt(0.975, df = degrees_freedom)
+
+# Calculate both confidence intervals
+ci_90 <- mean_difference + c(-1, 1) * t_critical_90 * conventional_se
+ci_95 <- mean_difference + c(-1, 1) * t_critical_95 * conventional_se
+
+# Display them in a small table
+ci_table <- tibble(
+  confidence_level = c("90%", "95%"),
+  lower = c(ci_90[1], ci_95[1]),
+  upper = c(ci_90[2], ci_95[2])
+)
+
+ci_table |>
+  mutate(across(c(lower, upper), ~ round(.x, 3))) |>
+  knitr::kable(
+    caption = "Confidence intervals for the urban–non-urban difference in log monthly earnings",
+    col.names = c(
+      "Confidence level",
+      "Lower confidence limit",
+      "Upper confidence limit"
+    ),
+    align = c("l", "r", "r")
+  ) |>
+  kableExtra::kable_styling(full_width = FALSE, position = "left") |>
+  kableExtra::row_spec(0, bold = TRUE)
+
+```
+
+12. Which interval is wider, and why?
+
+The 95% interval is wider because greater long-run coverage requires a larger critical value and margin of error.
+
+
+
+
+13. Interpret the 95% confidence interval. Then translate its endpoints into percentage differences.
+
+If we repeatedly drew samples and constructed intervals this way, about 95% would contain the true population difference. Transforming the endpoints gives an exact percentage interval of approximately 14.1% to 28.3%.
+
+
+14. Use the 95% interval to evaluate $H_0:\beta_1=0$, $H_0:\beta_1=0.10$, and $H_0:\beta_1=0.20$. 
+
+A proposed value inside the 95% interval is not rejected in the corresponding two-sided 5% test; a value outside it is rejected, when both use the same standard-error assumptions.
+
+
+```{r verify-ci}
+# Check the 90% and 95% intervals with confint()
+bind_rows(
+  as.data.frame(confint(urban_model, level = 0.90)) |>
+    tibble::rownames_to_column("Model term") |>
+    transmute(
+      `Confidence level` = "90%",
+      `Model term`,
+      `Lower confidence limit` = `5 %`,
+      `Upper confidence limit` = `95 %`
+    ),
+  as.data.frame(confint(urban_model, level = 0.95)) |>
+    tibble::rownames_to_column("Model term") |>
+    transmute(
+      `Confidence level` = "95%",
+      `Model term`,
+      `Lower confidence limit` = `2.5 %`,
+      `Upper confidence limit` = `97.5 %`
+    )
+) |>
+  mutate(
+    `Model term` = dplyr::recode(
+      `Model term`,
+      `(Intercept)` = "Intercept: mean for non-urban workers",
+      urban = "Urban minus non-urban difference",
+      .default = `Model term`
+    ),
+    across(c(`Lower confidence limit`, `Upper confidence limit`), ~ round(.x, 3))
+  ) |>
+  knitr::kable(
+    caption = "Confidence intervals calculated with confint for the urban-status regression",
+    align = c("l", "l", "r", "r")
+  ) |>
+  kableExtra::kable_styling(full_width = FALSE, position = "left") |>
+  kableExtra::row_spec(0, bold = TRUE)
+```
+
+# 7. Conventional versus unequal-variance inference
+
+An unequal-variance standard error for the group difference is
+
+$$
+SE_{unequal}=\sqrt{\frac{s_1^2}{n_1}+\frac{s_0^2}{n_0}}.
+$$
+
+```{r unequal-variance-test}
+unequal_se <- sqrt(var_1 / n_1 + var_0 / n_0)
+welch_df <- (var_1 / n_1 + var_0 / n_0)^2 /
+  ((var_1 / n_1)^2 / (n_1 - 1) + (var_0 / n_0)^2 / (n_0 - 1))
+welch_t <- mean_difference / unequal_se
+welch_p <- 2 * pt(-abs(welch_t), df = welch_df)
+
+tibble(
+  `Conventional standard error` = conventional_se,
+  `Unequal-variance standard error` = unequal_se,
+  `Welch t statistic` = welch_t,
+  `Welch degrees of freedom` = welch_df,
+  `Welch p value` = welch_p
+) |>
+  mutate(
+    across(
+      c(
+        `Conventional standard error`,
+        `Unequal-variance standard error`,
+        `Welch t statistic`,
+        `Welch degrees of freedom`
+      ),
+      ~ round(.x, 3)
+    ),
+    `Welch p value` = if_else(
+      `Welch p value` < 0.001,
+      "<0.001",
+      format(round(`Welch p value`, 3), nsmall = 3)
+    )
+  ) |>
+  knitr::kable(
+    caption = "Unequal-variance test results compared with the conventional standard error",
+    align = c("r", "r", "r", "r", "r")
+  ) |>
+  kableExtra::kable_styling(full_width = FALSE, position = "left") |>
+  kableExtra::row_spec(0, bold = TRUE)
+```
+
+15. Does the standard-error choice change the conclusion? Why should the method still be reported?
+
+The method may change the standard error and p-value even when it does not change the decision. Researchers should report it because inference depends on variance assumptions.
+
+
+```{r verify-t-tests}
+# Verify the pooled and Welch tests with t.test()
+bind_rows(
+  broom::tidy(t.test(lwage ~ urban_status, data = wage2, var.equal = TRUE)) |>
+    mutate(`Variance assumption` = "Equal variances"),
+  broom::tidy(t.test(lwage ~ urban_status, data = wage2, var.equal = FALSE)) |>
+    mutate(`Variance assumption` = "Unequal variances")
+) |>
+  transmute(
+    `Variance assumption`,
+    `Non-urban mean` = estimate1,
+    `Urban mean` = estimate2,
+    `Non-urban minus urban difference` = estimate,
+    `t statistic` = statistic,
+    `Degrees of freedom` = parameter,
+    `p value` = p.value,
+    `Lower 95 percent confidence limit` = conf.low,
+    `Upper 95 percent confidence limit` = conf.high
+  ) |>
+  mutate(
+    across(
+      c(
+        `Non-urban mean`,
+        `Urban mean`,
+        `Non-urban minus urban difference`,
+        `t statistic`,
+        `Degrees of freedom`,
+        `Lower 95 percent confidence limit`,
+        `Upper 95 percent confidence limit`
+      ),
+      ~ round(.x, 3)
+    ),
+    `p value` = if_else(
+      `p value` < 0.001,
+      "<0.001",
+      format(round(`p value`, 3), nsmall = 3)
+    )
+  ) |>
+  knitr::kable(
+    caption = "Equal-variance and Welch two-sample t tests for log monthly earnings",
+    align = c("l", "r", "r", "r", "r", "r", "r", "r", "r")
+  ) |>
+  kableExtra::kable_styling(full_width = FALSE, position = "left") |>
+  kableExtra::row_spec(0, bold = TRUE) |>
+  kableExtra::scroll_box(width = "100%")
+```
+
+Note: `t.test()` reports the first factor level minus the second. With Non-urban first, its estimate has the opposite sign from the regression slope, though the magnitude and two-sided p-value agree.
+
+# 8. Statistical significance and causal language
+
+16. A classmate writes: “Living in an urban area causes monthly earnings to increase.” Rewrite the claim so it is supported by this analysis.
+
+Supported statement: “Urban workers have higher average monthly earnings than non-urban workers in this sample,” followed by the estimated percentage difference.
+
+
+
+17. Name two factors that could affect earnings and be systematically different between urban and non-urban workers. What would leaving them out mean for $E(u\mid urban)=0$?
+
+Examples include education, occupation, industry, experience, local price levels, and regional labor-market conditions. If an omitted factor affects earnings and differs systematically by urban status, $E(u | urban) = 0$  fails and the coefficient may be biased.
+
+
+18. Is statistical significance the same as practical importance? What additional context would help you evaluate the size/ magnitude?
+
+Statistical significance measures evidence against a null relative to sampling uncertainty. Practical importance requires context such as dollar earnings, local cost-of-living differences, and comparisons with other earnings gaps.
+
+
+# 9. Final synthesis
+
+In 4–6 sentences, summarize the estimated difference, uncertainty, hypothesis-test result, and one important limitation. Use percentage language and avoid causal language.
+
+One possible response: Urban workers earn approximately 21% more per month than non-urban workers in this sample. The 95% interval corresponds to an exact percentage difference of approximately 14.1% to 28.3%. The test of no population difference is rejected at the 5% level. Unequal-variance inference can be compared with the conventional result. The analysis is associational because other differences between urban and non-urban workers may explain part of the gap.
+
+
+# Optional extension: sampling variability
+
+Draw 500 bootstrap samples, estimate the urban coefficient in each, and plot its sampling distribution. Compare its center and standard deviation with the original estimate and conventional standard error.
+
+```{r bootstrap-extension}
+set.seed(8300)
+
+# Write the bootstrap simulation here
+
+n <- nrow(wage2)
+
+bootstrap_slopes <- replicate(500, {
+  bootstrap_sample <- wage2[
+    sample(seq_len(n), size = n, replace = TRUE),
+  ]
+
+  coef(
+    lm(lwage ~ urban, data = bootstrap_sample)
+  )[["urban"]]
+})
+
+```
+
+```{r bootstrap-plot, fig.alt="Histogram of 500 bootstrap estimates of the urban coefficient. A vertical red line marks the coefficient estimated from the original sample."}
+tibble(beta_1_hat = bootstrap_slopes) |>
+  ggplot(aes(x = beta_1_hat)) +
+  geom_histogram(
+    bins = 30,
+    fill = "steelblue",
+    color = "white"
+  ) +
+  geom_vline(
+    xintercept = coef(urban_model)[["urban"]],
+    color = "#A30D26"
+  ) +
+  labs(
+    title = "Bootstrap Distribution of the Urban Coefficient",
+    x = "Estimated urban–non-urban log-earnings difference",
+    y = "Number of bootstrap samples"
+  ) +
+  theme_minimal()
+```
