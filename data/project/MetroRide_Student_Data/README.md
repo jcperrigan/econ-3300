@@ -1,6 +1,8 @@
 # MetroRide Industry Econometrics Challenge
 
-MetroRide is a fictional app-based ride service competing in five midsized metropolitan markets. The company wants evidence it can use to improve pricing, marketing, service quality, and customer retention. All people, markets, rides, and outcomes in these files are synthetic.
+MetroRide is a fictional app-based ride service competing in five midsized metropolitan markets. 
+The company wants evidence it can use to improve pricing, marketing, service quality, and customer retention. 
+All people, markets, rides, and outcomes in these files are synthetic.
 
 ## Files
 
@@ -10,7 +12,8 @@ MetroRide is a fictional app-based ride service competing in five midsized metro
 - `data_dictionary.csv`: Variable definitions, units, and coding notes.
 - `metroride_starter.R`: Minimal R code for loading, joining, and checking the files.
 
-The files join using `customer_id`. The ride file contains multiple observations for many customers. The marketing file contains one randomized campaign assignment per customer.
+The files join using `customer_id`. The ride file contains multiple observations for many customers. 
+The marketing file contains one randomized campaign assignment per customer.
 
 ## Available client briefs
 
@@ -19,7 +22,7 @@ The files join using `customer_id`. The ride file contains multiple observations
 3. **Service quality, ratings, and retention:** Examine how waiting, delays, disruptions, cancellations, driver characteristics, and vehicle quality relate to ratings, complaints, and future customer behavior.
 4. **Pricing, promotions, and purchasing behavior:** Examine customer price sensitivity, discount use, cancellations, completed rides, and differences across markets or trip types.
 
-## Important analytical notes
+## Important notes
 
 - Priority Pickup surcharges were randomly varied among eligible ride requests. Eligibility itself was not randomly assigned.
 - Campaign treatment was randomly assigned across customers. Treatment assignment is distinct from opening or redeeming an offer.
@@ -27,5 +30,4 @@ The files join using `customer_id`. The ride file contains multiple observations
 - Missing values are represented by blank cells. Some blanks are structural: for example, noneligible rides do not have a Priority Pickup price. Other blanks reflect ordinary missing information.
 - Zero `amount_paid` is expected for ride requests that were not completed.
 
-The dataset is intentionally realistic enough that different modeling choices can lead to different—but potentially defensible—answers. A statistically significant coefficient is not automatically a causal effect or a useful business recommendation.
 
