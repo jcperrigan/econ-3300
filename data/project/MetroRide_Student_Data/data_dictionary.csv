@@ -36,7 +36,11 @@ rides.csv,high_demand,integer,MetroRide high-demand indicator,1=yes; 0=no
 rides.csv,service_disruption,integer,Localized dispatch disruption active in market that day,1=yes; 0=no
 rides.csv,surge_multiplier,double,Fare multiplier applied during high demand,1.00 means no surge
 rides.csv,quoted_fare,double,Standard fare displayed before discounts and Priority fee,USD
-rides.csv,discount_amount,double,Ordinary ride discount applied,USD
+rides.csv,campaign_id,character,Campaign linked to a request during its 30-day follow-up window,WINBACK_2025_06; blank outside window
+rides.csv,campaign_treatment,character,Customer's randomly assigned campaign condition,Five conditions; blank outside window
+rides.csv,campaign_offer_applied,integer,Whether the assigned financial offer was applied to this completed ride,1=yes; 0=no
+rides.csv,discount_amount,double,Campaign discount applied to this completed ride,USD; zero unless $5 off or 20% off was redeemed
+rides.csv,ride_credit_earned,double,Account credit earned after this completed ride,USD; zero unless $5 ride credit was redeemed
 rides.csv,amount_paid,double,Total amount paid for completed request including Priority fee,USD; zero if not completed
 rides.csv,completed,integer,Whether requested ride was completed,1=yes; 0=no
 rides.csv,customer_cancelled,integer,Whether customer cancelled the request,1=yes; 0=no
@@ -53,13 +57,14 @@ marketing_experiment.csv,campaign_id,character,Campaign identifier,WINBACK_2025_
 marketing_experiment.csv,customer_id,character,Randomized customer identifier,Joins to customers.csv
 marketing_experiment.csv,assignment_date,date,Campaign assignment date,YYYY-MM-DD
 marketing_experiment.csv,treatment_group,character,Randomly assigned campaign condition,Five conditions including Control
-marketing_experiment.csv,offer_value,double,Nominal value associated with assigned offer,USD; percentage offer uses expected nominal value
+marketing_experiment.csv,offer_amount,double,Dollar amount associated with assigned offer,USD; zero for control; message only; and percentage offer
+marketing_experiment.csv,offer_percent,double,Percentage discount associated with assigned offer,Decimal; 0.20 for 20% off and zero otherwise
 marketing_experiment.csv,message_type,character,Marketing message emphasis,No message for control
 marketing_experiment.csv,offer_opened,integer,Whether customer opened campaign message,1=yes; 0=no
-marketing_experiment.csv,booked_within_30d,integer,Whether customer booked within 30 days after assignment,1=yes; 0=no
-marketing_experiment.csv,rides_within_30d,integer,Rides booked within 30-day follow-up window,Count
-marketing_experiment.csv,gross_spend_within_30d,double,Gross customer spending during follow-up,USD
+marketing_experiment.csv,booked_within_30d,integer,Whether customer requested at least one ride within 30 days after assignment,1=yes; 0=no
+marketing_experiment.csv,rides_within_30d,integer,Completed rides within the 30-day follow-up window,Count
+marketing_experiment.csv,gross_spend_within_30d,double,Fares and Priority fees before campaign discounts during follow-up,USD; completed rides only
 marketing_experiment.csv,offer_redeemed,integer,Whether assigned financial offer was redeemed,1=yes; 0=no
-marketing_experiment.csv,promotion_cost,double,Promotion cost incurred by MetroRide,USD
-marketing_experiment.csv,net_revenue_within_30d,double,MetroRide revenue share less promotion cost,USD
-marketing_experiment.csv,retained_within_60d,integer,Whether customer used MetroRide in the subsequent retention window,1=yes; 0=no
+marketing_experiment.csv,promotion_cost,double,Campaign discount or ride credit incurred by MetroRide,USD
+marketing_experiment.csv,net_revenue_within_30d,double,72% of gross spend less campaign promotion cost,USD
+marketing_experiment.csv,retained_within_60d,integer,Whether customer completed a ride during days 31-60 after assignment,1=yes; 0=no
