@@ -28,6 +28,10 @@ priority_sample <- rides_with_customers |>
 marketing_with_customers <- marketing |>
   left_join(customers, by = "customer_id")
 
+# Ride requests in the randomized campaign's 30-day follow-up window.
+campaign_rides <- rides_with_customers |>
+  filter(campaign_id == "WINBACK_2025_06")
+
 # Example descriptive summaries—not final econometric models.
 priority_sample |>
   mutate(expected_minutes_saved = standard_estimated_wait_min - priority_estimated_wait_min) |>
@@ -43,4 +47,3 @@ marketing_with_customers |>
     average_net_revenue = mean(net_revenue_within_30d),
     n = n()
   )
-
