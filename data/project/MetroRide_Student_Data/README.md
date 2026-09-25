@@ -8,12 +8,16 @@ All people, markets, rides, and outcomes in these files are synthetic.
 
 - `customers.csv`: 12,000 customer records and pre-2025 customer history.
 - `rides.csv`: 60,000 ride requests made during 2025, including completed and cancelled requests.
-- `marketing_experiment.csv`: 12,000 randomized assignments in a June 2025 customer campaign and outcomes measured after assignment.
+- `marketing_experiment.csv`: 12,000 randomized assignments in a June 2025 customer campaign and outcomes aggregated from the linked ride records.
 - `data_dictionary.csv`: Variable definitions, units, and coding notes.
 - `metroride_starter.R`: Minimal R code for loading, joining, and checking the files.
 
-The files join using `customer_id`. The ride file contains multiple observations for many customers. 
-The marketing file contains one randomized campaign assignment per customer.
+The files join using `customer_id`. The ride file contains multiple observations for many customers. The marketing file contains one randomized campaign assignment per customer.
+
+The campaign was assigned on June 2, 2025. Ride requests made during the following 30 days contain the campaign ID and assigned treatment in `rides.csv`. 
+A financial offer, if opened and redeemed, appears on the customer's first completed ride during that window. 
+Customer-level bookings, completed rides, spending, promotion costs, and net revenue in `marketing_experiment.csv` are calculated from those same ride records. 
+Retention indicates a completed ride during days 31–60 after assignment.
 
 ## Available client briefs
 
@@ -22,12 +26,12 @@ The marketing file contains one randomized campaign assignment per customer.
 3. **Service quality, ratings, and retention:** Examine how waiting, delays, disruptions, cancellations, driver characteristics, and vehicle quality relate to ratings, complaints, and future customer behavior.
 4. **Pricing, promotions, and purchasing behavior:** Examine customer price sensitivity, discount use, cancellations, completed rides, and differences across markets or trip types.
 
-## Important notes
+## Important analytical notes
 
 - Priority Pickup surcharges were randomly varied among eligible ride requests. Eligibility itself was not randomly assigned.
 - Campaign treatment was randomly assigned across customers. Treatment assignment is distinct from opening or redeeming an offer.
+- `discount_amount` and `ride_credit_earned` are linked only to the randomized June campaign; MetroRide did not apply a separate set of unexplained ride-level discounts.
 - Ordinary fares, surge pricing, loyalty membership, actual wait times, and service experiences are not generally randomized.
 - Missing values are represented by blank cells. Some blanks are structural: for example, noneligible rides do not have a Priority Pickup price. Other blanks reflect ordinary missing information.
 - Zero `amount_paid` is expected for ride requests that were not completed.
-
 
