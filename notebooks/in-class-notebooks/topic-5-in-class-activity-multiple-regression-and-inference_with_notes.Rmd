@@ -1,0 +1,659 @@
+---
+title: "In-Class Activity: Multiple Regression and Inference"
+output: 
+  html_document:
+    toc: yes
+    toc_depth: 2
+    df_print: kable
+    highlight: tango
+    includes:
+      in_header: wcag-overrides.html
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+# Learning goals
+
+By the end of this activity, you should be able to:
+
+- interpret a coefficient in a multiple regression using “holding other included variables constant”;
+- explain how omitted-variable bias can change a coefficient;
+- compare $R^2$ and adjusted $R^2$;
+- conduct individual t-tests and construct confidence intervals;
+- write a joint null hypothesis;
+- distinguish restricted and unrestricted models; and
+- calculate and interpret an F-test for joint significance.
+
+
+# 1. Set up and explore the data
+
+We will use `wage1` from the `wooldridge` package. Each observation represents one worker. The variables of interest are:
+
+- `wage`: average hourly earnings;
+- `lwage`: natural log of hourly earnings;
+- `educ`: years of education;
+- `exper`: years of potential labor-market experience;
+- `tenure`: years with the current employer; and
+- `female`: 1 if the worker is a woman and 0 otherwise.
+
+```{r packages}
+library(wooldridge)
+library(tidyverse)
+library(knitr)
+```
+
+```{r}
+source('reporting.R')
+```
+
+```{r inspect-data}
+data("wage1")
+
+# Open the documentation and inspect the main variables of interest
+?wage1
+
+# Check sample size, missing values, and descriptive statistics
+#summary(wage1)
+mk_dataset_summary(wage1)
+```
+
+- `wage`: average hourly earnings;
+- `lwage`: natural log of hourly earnings;
+- `educ`: years of education;
+- `exper`: years of potential labor-market experience;
+- `tenure`: years with the current employer; and
+- `female`: 1 if the worker is a woman and 0 otherwise.
+
+1. What is the unit of observation? Which variables are continuous, and which is binary?
+wage is dollars, lwage is the natural log of dollars. educ and exper and tenure are years. female is a binary variable. wage / lwage / educ/ exper/ tenure are all quantitative. female is binary.
+
+
+2. Before estimating anything, predict the sign of each slope coefficient in
+
+
+$$
+lwage_i=\beta_0+\beta_1 educ_i+\beta_2 exper_i+
+\beta_3 tenure_i+\beta_4 female_i+u_i.
+$$
+$\beta_1 > 0$
+$\beta_2 > 0$
+$\beta_3 > 0$
+$\beta_4 < 0$
+
+
+
+# 2. Visualize selected relationships
+
+Create two plots:
+
+1. a scatterplot of `educ` and `lwage` with a fitted line; and
+2. a boxplot of `lwage` by gender.
+
+Include informative labels and alt text.
+
+```{r education-plot, fig.alt="Scatterplot of log hourly earnings against years of education with a fitted linear regression line."}
+# Education and log-wage plot
+ggplot(wage1, aes(x = educ, y = lwage)) + 
+  geom_point(color = "steelblue") + 
+  geom_smooth(method = 'lm', se = FALSE, formula = y ~ x, color = "darkorchid")
+```
+
+
+```{r gender-plot, fig.alt="Side-by-side boxplots comparing log hourly earnings for men and women in the wage sample."}
+wage1 <-  wage1 %>%
+  mutate(gender = factor(female, levels = c(0, 1), labels = c("men", "women")))
+# Create a labeled gender factor and make the boxplot
+ggplot(wage1, aes(x = gender, y = lwage, fill = gender)) +
+  geom_boxplot(show.legend = FALSE) 
+
+```
+
+3. What do the plots suggest about the relationships? Why can neither plot show the partial relationship between a predictor and earnings?
+
+The scatterplot shows that education is positively associated with higher log wages in the sample. The boxplot shows us that women have a lower lwage in the sample on average. These are unconditional relationships (only looking at one variable vs. lwage), these plots aren't including any other variable, aren't holding other factors constant.
+
+
+
+# 3. From simple to multiple regression
+
+Estimate these models:
+
+$$
+\text{Model 1: } lwage_i=\beta_0+\beta_1 educ_i+u_i
+$$
+
+$$
+\text{Model 2: } lwage_i=\beta_0+\beta_1 educ_i+\beta_2 exper_i+
+\beta_3 tenure_i+\beta_4 female_i+u_i.
+$$
+
+```{r estimate-models}
+# Estimate the simple model as model_1
+model_1 <- lm(lwage ~ educ, data = wage1)
+
+# Estimate the multiple regression as model_2
+
+model_2 <- lm(lwage ~ educ + exper + tenure + female, data = wage1)
+
+# Display both summaries
+#summary(model_1)
+#summary(model_2)
+
+```
+
+```{r, results = "asis"}
+mk_coeftab(model_1, caption = "model 1 summary")
+
+```
+
+```{r, results = "asis"}
+mk_coeftab(model_2, caption = "model 2 summary")
+
+```
+
+4. Write the fitted equation for Model 2.
+
+$\hat{lwage} = 0.5 + 0.087 educ + 0.005 exper + 0.017 tenure - 0.3 female$
+
+5. Interpret the coefficients on `educ`, `tenure`, and `female`. Use exact percentage transformations where appropriate:
+Each continuous slope is the earnings difference associated with a one-unit increase in that x, holding the other x variables constant. So for educ, and because the y variable is log transformed, and if we use the approximation, a one year increase in educ is associated with a 0.087 x 100 = 8.7% increase in wages.
+Similar interpretation for tenure (its slope is the earnings difference associated with a one unit increase in tenure, holding the other variables constant). In this case, 0.017 x 100 = 1.7% increase in wages.
+The female coefficient (because it's binary), it's the conditional log-wage difference between women and men with the same values for education/ experience/ tenure
+
+
+Approximate change: multiply the coefficient by 100. A one unit increase in x is associated with a 100 x 100 % change in Y.
+
+This doesn't work for larger changes and honestly is just an approximation anyway; the better choice is to do the: 
+
+$$
+100(e^{\widehat\beta}-1).
+$$
+Exponentiating to "undo" the log (our dependent variable is log transformed) and then subtract 1 and multiply by 100 to turn it into a percent change. 
+
+if beta = .33:
+
+approximation is a one unit change in x -> .33 x 100 = 33% change in y.
+
+Exactly:
+
+```{r}
+(exp(.33)-1) * 100
+```
+
+
+```{r exact-percentages}
+# Calculate exact percentages for educ, tenure, and female
+(exp(coef(model_2)["educ"])-1) * 100
+(exp(coef(model_2)["tenure"])-1) * 100
+(exp(coef(model_2)["female"])-1) * 100
+```
+
+6. Compare the education coefficient across Models 1 and 2. Give a plausible omitted-variable-bias explanation for the change, but do not claim that the multiple-regression estimate is automatically causal.
+
+```{r}
+coef(model_1)["educ"]
+coef(model_2)["educ"]
+coef(model_1)["educ"] - coef(model_2)["educ"]
+```
+A coefficient change is consistent with OVB in the simple model but doesn't prove that model 2 has ever control variable and also doesn't identify a causal return to education and also doesn't actually prove OVB. It gives a clue that it exists.
+
+
+7. For an omitted variable $Z$ to bias the education coefficient, what two conditions must hold?
+
+1. Z has to affect Y (after controlling for X) so that its $\beta$ (from the true model) is not equal to zero.
+2. Z is correlated with X, so that $Cov(X, Z) \neq 0$
+
+$plim(\tilde{\beta}_1) = \beta_1 + \beta_2 \frac{Cov(X, Z)}{Var(X)}$
+
+Where X is in the true model and also the estimated model, $\beta_1$ is its coefficient from the true model, $\tilde{\beta}_1$ is its coefficient from the estimated model without Z, $\beta_2$ is Z's coefficient (its coefficient from the true model):
+
+$y_i = \beta_0 + \beta_1 X + \beta_2 Z + u_i$
+
+
+
+# 4. Fitted values, residuals, and model fit
+
+Create a prediction for a worker with 16 years of education, 10 years of experience, 5 years of tenure, and `female = 1`. Report predicted log wage and predicted hourly wage.
+
+```{r prediction}
+new_worker <- tibble(educ = 16, exper = 10, tenure = 5, female = 1)
+
+# Add predicted lwage and wage
+new_worker$predicted_lwage <- predict(model_2, newdata = new_worker)
+new_worker$predicted_wage <- exp(new_worker$predicted_lwage)
+
+new_worker <- tibble(
+  educ = 16,
+  exper = 10,
+  tenure = 5,
+  female = 1
+) |>
+  mutate(
+    predicted_lwage = predict(model_2, newdata = pick(everything())),
+    predicted_wage = exp(predicted_lwage)
+  )
+
+new_worker |>
+  mutate(
+    female = if_else(female == 1, "Female", "Male"),
+    across(c(predicted_lwage, predicted_wage), \(x) round(x, 2))
+  ) |>
+  rename(
+    "Education (years)" = educ,
+    "Experience (years)" = exper,
+    "Tenure (years)" = tenure,
+    "Sex" = female,
+    "Predicted log wage" = predicted_lwage,
+    "Predicted wage ($/hour)" = predicted_wage
+  ) |>
+  knitr::kable(
+    caption = "Predicted wage for a worker with 16 years of education, 10 years of experience, and 5 years of tenure.",
+    align = c("r", "r", "r", "l", "r", "r")
+  ) |>
+  kableExtra::kable_styling(
+    bootstrap_options = c("striped", "hover"),
+    full_width = FALSE
+  )
+
+```
+
+8. Interpret the prediction. Why should you avoid describing it as the worker’s guaranteed wage?
+
+This is the fitted conditional mean implied by the model, not an individual guarantee. The residual component and omitted determinants create variation around the prediction.
+
+
+
+Compare $R^2$, adjusted $R^2$, residual standard error, AIC, and BIC.
+
+```{r model-fit}
+# Create a compact model-fit table
+model_fit <- tibble(
+  model = c("Education only", "Multiple regression"),
+  r_squared = c(summary(model_1)$r.squared, summary(model_2)$r.squared),
+  adjusted_r_squared = c(summary(model_1)$adj.r.squared,
+                         summary(model_2)$adj.r.squared),
+  residual_standard_error = c(sigma(model_1), sigma(model_2)),
+  AIC = c(AIC(model_1), AIC(model_2)),
+  BIC = c(BIC(model_1), BIC(model_2))
+)
+
+
+model_fit |>
+  rename(
+    "Model" = model,
+    "R-squared" = r_squared,
+    "Adjusted R-squared" = adjusted_r_squared,
+    "Residual standard error" = residual_standard_error
+  ) |>
+  mutate(
+    across(
+      c(
+        "R-squared",
+        "Adjusted R-squared",
+        "Residual standard error"
+      ),
+      \(x) round(x, 3)
+    ),
+    across(c(AIC, BIC), \(x) round(x, 1))
+  ) |>
+  knitr::kable(
+    caption = "Comparison of model fit statistics for the education-only and multiple regression models.",
+    align = c("l", "r", "r", "r", "r", "r")
+  ) |>
+  kableExtra::kable_styling(
+    bootstrap_options = c("striped", "hover"),
+    full_width = FALSE
+  )
+
+```
+
+9. Why must Model 2’s $R^2$ be **at least as large** as Model 1’s? Why might adjusted $R^2$ fall after adding a variable?
+
+OLS can assign zero slopes to added variables, so adding regressors can't increase minimized RSS and can't lower $R^2$. Adjusted $R^2$ penalizes added regressors and can fall when their fit improvement is too small.
+
+10. Does the model with the largest $R^2$ necessarily have the best causal specification? Explain.
+
+No. Maximizing fit can encourage inappropriate controls, post-treatment variables, overfitting, and data mining. Causal specification depends on theory, timing, and the data-generating process.
+
+
+
+
+# 5. Individual inference in multiple regression
+
+For an individual coefficient,
+
+$$
+t=\frac{\widehat\beta_j-\beta_{j,0}}
+{SE(\widehat\beta_j)}.
+$$
+
+Test $H_0:\beta_{tenure}=0$ against $H_1:\beta_{tenure}\neq0$ by extracting the estimate and conventional standard error from Model 2 and calculating the t-statistic and two-sided p-value.
+
+```{r tenure-test}
+tenure_estimate <- coef(model_2)["tenure"]
+tenure_se <- coef(summary(model_2))["tenure", "Std. Error"]
+tenure_df <- df.residual(model_2)
+tenure_t <- tenure_estimate / tenure_se
+tenure_p <- 2 * pt(-abs(tenure_t), df = tenure_df)
+
+
+tenure_results <- tibble(
+  term = "Tenure",
+  estimate = unname(tenure_estimate),
+  standard_error = unname(tenure_se),
+  t_statistic = unname(tenure_t),
+  degrees_of_freedom = tenure_df,
+  p_value = unname(tenure_p)
+)
+
+tenure_results |>
+  rename(
+    "Term" = term,
+    "Estimate" = estimate,
+    "Standard error" = standard_error,
+    "t statistic" = t_statistic,
+    "Degrees of freedom" = degrees_of_freedom,
+    "p-value" = p_value
+  ) |>
+  mutate(
+    across(
+      c("Estimate", "Standard error", "t statistic"),
+      \(x) round(x, 3)
+    ),
+    "p-value" = format.pval(`p-value`, digits = 3, eps = 0.001)
+  ) |>
+  knitr::kable(
+    caption = "Hypothesis test results for the tenure coefficient.",
+    align = c("l", "r", "r", "r", "r", "r")
+  ) |>
+  kableExtra::kable_styling(
+    bootstrap_options = c("striped", "hover"),
+    full_width = FALSE
+  )
+```
+
+11. State the decision at $\alpha=0.05$ and interpret the result in context.
+
+At 5%, `r ifelse(tenure_p <= .05, "reject", "fail to reject")` the null of no partial association between tenure and log wages. The coefficient is interpreted holding education, experience, and gender constant.
+
+
+Construct 95% confidence intervals for every Model 2 coefficient.
+
+```{r coefficient-cis}
+# Use confint()
+model_2_ci <- confint(model_2, level = 0.95)
+
+
+model_2_ci |>
+  as.data.frame() |>
+  tibble::rownames_to_column("Coefficient") |>
+  setNames(c(
+    "Coefficient",
+    "Lower bound",
+    "Upper bound"
+  )) |>
+  mutate(
+    across(
+      c("Lower bound", "Upper bound"),
+      \(x) round(x, 3)
+    )
+  ) |>
+  knitr::kable(
+    caption = "95% confidence intervals for the multiple regression coefficients.",
+    align = c("l", "r", "r")
+  ) |>
+  kableExtra::kable_styling(
+    bootstrap_options = c("striped", "hover"),
+    full_width = FALSE
+  )
+```
+
+12. Interpret the interval for `educ`. Which individual null hypotheses $H_0:\beta_j=0$ are rejected at the 5% level?
+Under repeated sampling, 95% of intervals produced this way would contain the population coefficient. A coefficient’s two-sided zero null is rejected at 5% exactly when its corresponding interval excludes zero.
+
+
+# 6. Why an F-test?
+
+Suppose we want to know whether labor-market history contributes to the model after controlling for education and gender. The joint hypotheses are
+
+$$
+H_0:\beta_{exper}=0 \text{ AND } \beta_{tenure}=0
+$$
+
+$$
+H_1:\beta_{exper}\neq0 \text{ OR } \beta_{tenure}\neq0.
+$$
+
+13. How many restrictions are in the null? What does “OR” in the alternative mean?
+There are q=2 restrictions. “OR” means the alternative is true if at least one of the two coefficients differs from zero, rejection doesn't require both to be nonzero.
+
+
+
+14. Why not just conduct two separate t-tests at $\alpha=0.05$ and reject the joint null if either is significant?
+Separate 5% tests inflate the probability of at least one false rejection and ignore covariance between the coefficient estimates. The F-test controls the size of the single joint test.
+
+
+The **unrestricted model** includes all variables:
+
+$$
+lwage_i=\beta_0+\beta_1 educ_i+\beta_2 exper_i+
+\beta_3 tenure_i+\beta_4 female_i+u_i.
+$$
+
+The **restricted model** imposes the null by removing `exper` and `tenure`:
+
+$$
+lwage_i=\beta_0+\beta_1 educ_i+\beta_4 female_i+u_i.
+$$
+
+15. Explain why Model 2 is unrestricted and the smaller model is restricted. Which model can never have the larger residual sum of squares?
+
+Model 2 is unrestricted because it estimates `exper` and `tenure` freely. The restricted model imposes the joint null by setting both slopes to zero. The unrestricted model cannot have larger RSS because it contains the restricted model as a special case.
+
+
+
+# 7. Calculate the partial F-test by hand
+
+Use the residual sum of squares (SSR) form:
+
+$$
+F=\frac{(SSR_R-SSR_U)/q}{SSR_U/(n-k_U-1)}
+\sim F(q,n-k_U-1),
+$$
+
+where:
+
+- $SSR_R$ is the restricted-model residual sum of squares;
+- $SSR_U$ is the unrestricted-model residual sum of squares;
+- $q$ is the number of restrictions;
+- $k_U$ is the number of slopes in the unrestricted model; and
+- $n-k_U-1$ is the unrestricted model’s residual degrees of freedom.
+
+```{r partial-f-test}
+restricted_model <- lm(lwage ~ educ + female, data = wage1)
+unrestricted_model <- model_2
+
+RSS_R <- sum(resid(restricted_model)^2)
+RSS_U <- sum(resid(unrestricted_model)^2)
+q <- 2
+df_U <- df.residual(unrestricted_model)
+
+partial_F <- ((RSS_R - RSS_U) / q) / (RSS_U / df_U)
+partial_p <- pf(partial_F, df1 = q, df2 = df_U, lower.tail = FALSE)
+partial_critical <- qf(0.95, df1 = q, df2 = df_U)
+
+partial_F_results <- tibble(
+  test = "Joint significance of experience and tenure",
+  f_statistic = partial_F,
+  numerator_df = q,
+  denominator_df = df_U,
+  critical_value = partial_critical,
+  p_value = partial_p
+)
+
+partial_F_results |>
+  rename(
+    "Test" = test,
+    "F statistic" = f_statistic,
+    "Numerator df" = numerator_df,
+    "Denominator df" = denominator_df,
+    "Critical value" = critical_value,
+    "p-value" = p_value
+  ) |>
+  mutate(
+    across(
+      c("F statistic", "Critical value"),
+      \(x) round(x, 3)
+    ),
+    "p-value" = format.pval(`p-value`, digits = 3, eps = 0.001)
+  ) |>
+  knitr::kable(
+    caption = "Partial F-test of the joint significance of experience and tenure.",
+    align = c("l", "r", "r", "r", "r", "r")
+  ) |>
+  kableExtra::kable_styling(
+    bootstrap_options = c("striped", "hover"),
+    full_width = FALSE
+  )
+```
+
+16. State the decision and conclusion in context. Be clear about what's held constant.
+At 5%, `r ifelse(partial_p <= .05, "reject", "fail to reject")` the joint null that experience and tenure have no partial association with log wages after controlling for education and gender.
+
+
+Check the calculation by comparing the nested models.
+
+```{r verify-partial-f, results = 'asis"}
+# Use anova(restricted_model, unrestricted_model)
+mk_anova(restricted_model)
+mk_anova(unrestricted_model)
+```
+
+17. Match every element of the ANOVA comparison to the hand calculation: $q$, $SSR_R-SSR_U$, $F$, and the p-value.
+
+The ANOVA `Df` change is $q$; `Sum of Sq` is $RSS_R-RSS_U$. its F and p-value match the hand calculation.
+
+
+18. If the partial F-test rejects, does that prove both coefficients are individually nonzero? Explain why/ why not.
+
+No. Rejection means at least one restriction is false or the pair is jointly inconsistent with zero. It does not establish that both individual coefficients differ from zero.
+
+
+
+# 8. The overall F-test
+
+The F-statistic in `summary(model_2)` tests
+
+$$
+H_0:\beta_{educ}=\beta_{exper}=\beta_{tenure}=\beta_{female}=0.
+$$
+
+19. What is the restricted model for this test? Extract the overall F-statistic and its two degrees of freedom, then calculate its p-value.
+
+The restricted model is intercept-only. The output tests all four slopes jointly.
+
+```{r overall-f-test}
+overall_f <- summary(model_2)$fstatistic
+
+# Display F, numerator df, denominator df, and p-value
+
+overall_F_results <- tibble(
+  test = "Overall model significance",
+  f_statistic = unname(overall_f["value"]),
+  numerator_df = unname(overall_f["numdf"]),
+  denominator_df = unname(overall_f["dendf"]),
+  p_value = pf(
+    unname(overall_f["value"]),
+    df1 = unname(overall_f["numdf"]),
+    df2 = unname(overall_f["dendf"]),
+    lower.tail = FALSE
+  )
+)
+
+overall_F_results |>
+  rename(
+    "Test" = test,
+    "F statistic" = f_statistic,
+    "Numerator df" = numerator_df,
+    "Denominator df" = denominator_df,
+    "p-value" = p_value
+  ) |>
+  mutate(
+    "F statistic" = round(`F statistic`, 3),
+    "p-value" = format.pval(`p-value`, digits = 3, eps = 0.001)
+  ) |>
+  knitr::kable(
+    caption = "Overall F-test of model significance.",
+    align = c("l", "r", "r", "r", "r")
+  ) |>
+  kableExtra::kable_styling(
+    bootstrap_options = c("striped", "hover"),
+    full_width = FALSE
+  )
+
+```
+
+
+
+20. How does the overall F-test answer a different question from the partial F-test in Section 7?
+
+The overall test asks whether any included slope contributes relative to an intercept-only model. The partial test asks whether experience and tenure add explanatory power after education and gender are already included.
+
+
+
+# 9. Multicollinearity and specification
+
+Inspect correlations among the continuous regressors.
+
+```{r correlations}
+# Correlation matrix for educ, exper, and tenure
+cor(wage1[, c("educ", "exper", "tenure")]) |>
+  as.data.frame() |>
+  tibble::rownames_to_column("Variable") |>
+  dplyr::rename(
+    "Education" = educ,
+    "Experience" = exper,
+    "Tenure" = tenure
+  ) |>
+  dplyr::mutate(
+    Variable = dplyr::recode(
+      Variable,
+      educ = "Education",
+      exper = "Experience",
+      tenure = "Tenure"
+    ),
+    dplyr::across(dplyr::where(is.numeric), \(x) round(x, 3))
+  ) |>
+  knitr::kable(
+    caption = "Correlation matrix for education, experience, and tenure.",
+    align = c("l", "r", "r", "r")
+  ) |>
+  kableExtra::kable_styling(
+    bootstrap_options = c("striped", "hover"),
+    full_width = FALSE
+  )
+```
+
+21. What happens to standard errors when regressors don't have a lot of independent variation? Does multicollinearity bias OLS coefficients?
+
+Strong collinearity increases coefficient variances and standard errors because little independent variation remains to isolate partial effects. It does not itself bias OLS coefficients.
+
+
+22. A researcher keeps adding variables just because they increase $R^2$. Identify two problems with this approach.
+
+Problems include overfitting, mechanically favoring irrelevant variables, increasing estimator variance, adding inappropriate controls, and confusing predictive fit with causal identification. $R^2$ never penalizes complexity.
+
+# 10. Final check
+
+In 5–7 sentences, summarize the Model 2 results. Include:
+
+- one partial-effect interpretation;
+- one individual inference result;
+- the partial F-test conclusion;
+- the overall F-test conclusion; and
+- one limitation affecting causal interpretation.
+
+
+
