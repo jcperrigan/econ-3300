@@ -321,18 +321,25 @@ $$
 ### Questions
 
 - Why is conducting two separate t-tests not the same as conducting one joint F-test?
+Separate t test don't control for a joint rejection probability. They overlook the statistical relationship (covariance) between the multiple coefficient estimates. You end up with an inflation of type I error (false positive error). Separate t tests assume independence (no covariance between the coefficients), but when the variables are correlated, the joint rejection probability depends on that covariance. 
 
 - In a joint test, what does the null hypothesis say about the model?
+both variables test at zero at the same time, they have no explanatory power. 
 
 - What is the restricted model in this example?
+wage = educ + female + u (drop the two variables we're testing, tenure and experience).
 
 - What is the unrestricted model?
+wage = educ + female + tenure + experience + u
 
 - Why does the F-test compare the fit of a restricted model with the fit of an unrestricted model?
+When we compare the two models, we're comparing their sum of squared residuals. Does imposing the restrictions substantially worsen model fit (in a statistically significant fashion)? Do the restriction cause cause a substantial loss of fit, which is evidence against the null hypothesis. 
 
 - If the p-value for the F-test is 0.003, what is your conclusion at the 5% level?
+Reject our null hypothesis
 
 - Does rejecting the joint null imply that both coefficients are individually statistically significant?
+No, means that at least one of them is not equal to zero. The joint test can reject because the coefficients matter collectively, just one of them has to be non-zero. 
 
 ---
 
@@ -373,10 +380,13 @@ $$
 ### Questions
 
 - Why can't you interpret 1.1 as "one more year of experience always raises wages by \$1.10"?
+The marginal effect depends on experience, and experience shows up twice. And one of those times it's squared.
+
 
 - What does the negative coefficient on $exper^2$ suggest about the shape of the relationship?
+The relationship is an upside down U (concave). Wages rise with experience (but at a decreasing rate) until it reaches a maximum and then it starts to decline.
 
-- Approximately what is the marginal effect of another year of experience when `exper = 10`?
+- Approximately what is the marginal effect of another year of experience when `exper = 10`? (what happens when you start at `exper = 10` and then you get another year of experience?)
 
 Use
 
@@ -387,10 +397,19 @@ $$
 +
 2\widehat{\beta}_2 exper.
 $$
+```{r}
+1.1 + (2 * -.02 * 10)
+```
+
 
 - What is the marginal effect when `exper = 20`?
+```{r}
+1.1 + (2 * -.02 * 20)
+```
+
 
 - Why does the marginal effect change with experience?
+The slope of the regression varies depending on your starting point because the partial derivative contains X (it contains experience).
 
 ---
 
