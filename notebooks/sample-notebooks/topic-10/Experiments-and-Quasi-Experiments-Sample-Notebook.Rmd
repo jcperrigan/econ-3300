@@ -1,0 +1,1676 @@
+---
+title: "ECON-3300"
+output:
+  html_document:
+    toc: yes
+    toc_depth: 2
+    df_print: kable
+    highlight: tango
+    includes:
+      in_header: wcag-overrides.html
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+```{r}
+pkgs <- c("tidyverse","wooldridge","sandwich","lmtest","car", "broom", "kableExtra")
+ok <- sapply(pkgs, require, character.only = TRUE)
+if (any(!ok)) stop("Missing packages: ", paste(pkgs[!ok], collapse = ", "))
+```
+
+```{r}
+source("reporting.R")
+```
+
+# Experiments 
+
+
+## Introduction
+
+### The zero conditional mean assumption
+
+Remembering the zero conditional mean assumption:
+
+$$
+E[u_i \mid X_i] = E[u_i] = 0
+$$
+
+This assumption says that $X_i$ isn't informative about the expected value of $u_i$. This would be the case if $u_i$ can be regarded as purely random.
+
+But! Error terms are complicated. $u_i$ may contain omitted variables that are still correlated with $X_i$, which would break the assumption. We're often not able to state that $u_i$ is "purely random". 
+
+So if we can't trust $u_i$ to be random, what else can we do? We could make $X_i$ random instead. If $X_i$ is random then $u_i$ will be conditionally mean independent of $X_i$ by construction. 
+
+If $X_i$ is randomly assigned, all the other individual characteristics, the things that make up the error term $u_i$, are distributed independently of $X_i$ and $u_i$ and $X_i$ are independent. But what does it mean to "make $X_i$ random"?
+
+### Observational study design
+
+Let's say we want to study whether having your phone within reach hurt learning during a study session.
+
+So far we're been looking at observational studies. The observational version of this is to ask students how often they keep their phones within reach while studying, then give them the same short reading and comprehension quiz. We might also give the students in the study a questionnaire that asks about age, GPA, work hours, and usual study time.
+
+We could estimate:
+
+$$
+QuizScore_i = \beta_0 + \beta_1 PhoneNearby_i + \beta_2 GPA_i + \beta_2 WorkHours_i + \beta_4 Age_i + u_i
+$$
+The controls account for some measured differences. But students with their phones nearby may also be different in motivation, stress, study environment, or how prepared they were that day. Those factors can also affect quiz scores and be related to phone habits. If they're not measured well or included in the model, they remain in $u_i$, and the zero conditional mean assumption may fail:
+
+$$
+E[u_i \mid PhoneNearby_i, GPA_i, WorkHours_i, Age_i] \neq 0
+$$
+You can make the questionnaire longer, but you can't be totally sure you've measured every relevant difference. Some factors are hard to measure, and some might not occur to you until after you've seen the results.
+
+### Randomized controlled experiment study design
+
+A randomized controlled experiment is a study design that randomly assigns participants into an experimental group or a control group. RCTs are true experiments where participants are randomly allocated to receive a certain intervention (the experimental group) or a different intervention (comparison group) or no treatment at all (control or placebo group).
+
+Randomization minimizes selection bias since participants are assigned by chance; good randomization "washes out" population bias. This ensures that differences between the groups can be attributed to the intervention itself instead of other variables. They are easier to blind/ mask than observational studies. 
+
+However, they are also expensive in terms of time and money. There may also be a volunteer bias (the population that participates may not be representative of the whole). There are also ethical constraints to consider. For example, you can't randomly assign some people to go to university and some people to not.
+
+For the RCT version of the phone research question, instead of asking students to choose where their phones go, we would randomly assign them. Some students would be randomly assigned to have their phones on the desk, and some to have their phones put away. Then everyone would study the same material for the same amount of time and take the same quiz.
+
+The important move here is **not making $u_i$ random.** We don't control or randomize every factor that affects quiz scores. We randomize $X_i$, the assigned phone condition, so that by design it's unrelated to students' observed and unobserved characteristics on average. That makes the zero conditional mean assumption much more plausible for estimating the treatment effect.
+
+Controls try to adjust for differences we measured, while random assignment helps balance differences we didn't measure.
+
+### Why study RCTs in an econometrics course?
+
+1. An ideal randomized controlled experiment provides a conceptual benchmark against which to judge estimates of causal effects made with observational data.
+
+2. The results of randomized controlled experiments, when conducted, can be very influential, so it's important to understand the limitations and threats to validity of actual experiments, as well as their strengths.
+
+3. External circumstances sometimes produce what appears to be randomization. Because of external events, the treatment of some individual occurs "as if" it is random (possibly conditional on some control variable). This produces a quasi-experimental or natural experiment. We can apply the same RCT methods (with some modifications) to quasi-experiments.
+
+
+### Methodologies used and their purpose
+
+This chapter will cover multiple regression analysis, panel data, and instrumental variables (IV) regression. This sample notebook will cover the basics of IV regression and how to do it; for more details, see chapter 12 of Stock and Watson.
+
+These methodologies are some that can be used for program evaluation, which is the field of study that concerns estimating the effect of a program, policy, or some other intervention or "treatment." 
+
+## Potential Outcomes, Causal Effects, and Idealized Experiments
+
+### Potential outcomes and the average causal effect
+
+#### Potential outcomes
+
+The potential outcomes notation goes way back to the 1920s and Neyman, but Don Rubin is the person responsible for its widespread adoption in statistics and the social sciences, so much so that it's been called the "Rubin causal model."
+
+A potential outcome is the outcome for an individual under a potential treatment. The causal effect for that individual is the difference in the potential outcome if the treatment is received and the potential outcome if it isn't.
+
+To be concrete, we'll use Neyman and Rubin's potential outcomes notation. To make our lives easier, we'll assume a binary variable that takes on a value of $1$ if a particular subject $i$ receives the treatment and a zero if it doesn't:
+
+$$
+D_i =
+\begin{cases}
+1 & \text{if student } i \text{ puts their phone away} \\
+0 & \text{if student } i \text{ keeps their phone on the desk}
+\end{cases}
+$$
+We will also define the potential outcomes:
+
+$$
+Y_i^j(d) =
+\begin{cases}
+\text{quiz score if student } i \text{ puts their phone away} & \text{if } d=1 \\
+\text{quiz score if student } i \text{ keeps their phone on the desk} & \text{if } d=0
+\end{cases}
+$$
+where $j$ indexes a potential treatment status for the same $i$ person (at the same $t$ point in time, if we are using time in the design). This means that $Y_{Sue}^1$ is Sue's quiz score if she's in the group that is assigned to put their phone away, and $Y_{Sue}^0$ is Sue's quiz score if she's in the group that isn't assigned to put their phone away. They can't coexist because we can't observe parallel universes, but we can define them.
+
+Let's talk about notation. Potential outcomes have numbers in the subscript like $Y_i^1$. You will also see it written like $Y_i(1)$, like in Stock and Watson. When you see a $1$ or a $0$ in the superscript or in parentheses like that, it refers to a person's potential outcome in a world where the treatment did $(1)$ or did not $(0)$ happen. 
+
+It can seem a little strange because $i$ is used for both potential outcomes $Y_i^1$ and $Y_i^0$ (or $Y_i(1)$ and $Y_i(0)$), and that's the paradox because it's assumed it's a different potential outcome for the same person. It means there are two parallel identical universes, there's person $i$ in both of them, but in one of them she's assigned to the treatment group and in the other she's not.
+
+#### Realized outcomes
+
+The causal effect can be different from one individual to the next since individuals are different, but there's no way to measure the causal effect for a single individual. Each unit will have two potential outcomes, but only one real or realized outcome. The individual either receives the treatment or doesn't receive the treatment, so one of the potential outcomes can be observed, but not both.
+
+Potential outcomes can be recognized with numbers in the subscript or in parentheses, while realized outcomes can be recognized because they don't have anything in the subscript or in parentheses. 
+
+Realized outcomes are known *ex post* because they were the one chosen by the treatment itself, $D_i = 1$ or $D_i = 0$. We can represent this with the switching equation:
+
+$$
+Y_i = Y_i(1)D_i + Y_i(0)(1 - D_i) 
+$$
+
+This equation relates observed outcome $Y_i$ to the potential outcomes. Here $D_i$ is our treatment dummy variable (hence $D$), but $X$ may also be used for non-dummy variables.
+
+When $D_i = 1$, or the individual receives the treatment, the right side of the equation simplifies to:
+
+$$
+\begin{aligned}
+Y_i &= Y_i(1)1 + Y_i(0)(1 - 1) \\
+&= Y_i(1)(1) + Y_i(0)(0) \\
+&= Y_i(1)
+\end{aligned}
+$$
+and so we observe $Y_i = Y_i(1)$.
+
+When $D_i = 0$, or the individual doesn't receive the treatment, the right side simplifies to:
+
+$$
+\begin{aligned}
+Y_i &= Y_i(1)(0) + Y_i(0)(1 - 0) \\
+&= Y_i(1)(0) + Y_i(0)(1) \\
+&= Y_i(0)
+\end{aligned}
+$$
+
+and so we observe $Y_i = Y_i(0)$.
+
+#### Individual treatment effects
+
+We'll follow Rubin and define a unit specific causal effect, or a treatment effect. The individual treatment effect is the difference between $Y_i(1)$ and $Y_i(0)$, the two potential outcomes for person $i$ if the treatment is binary:
+
+$$
+\delta_i = Y_i(1) - Y_i(0)
+$$
+
+Because an individual is treated or not, when we observe $(Y_i, X_i)$, $Y_i(1)$ or $Y_i(0)$ is the observed outcome for that individual and we can't directly observe $Y_i(1) - Y_i(0)$. Directly observing an individual treatment effect would require observing two parallel universes. We're missing one of the numbers we need to measure the person's treatment effect!
+
+This is the fundamental problem of causal inference: it's all about missing data. This missing data problem isn't that there are holes in our dataset, or that we forgot to collect certain variables. Or that we could increase the size of our dataset. 
+
+The fundamental problem of causal inference can't be overcome because no matter how big our dataset gets, it will always be too small by half. We'll always be missing half the data we need to calculate individual level treatment effects. And the data we're missing is a potential outcome that doesn't exist and never will!
+
+However, we do have ways of imputing this missing data, though it's not totally straightforward.
+
+#### Average treatment effects
+
+Once potential outcomes are used to define the individual treatment effect, we can construct the aggregate treatment effects by averaging over them.
+
+We will discuss the average treatment effect, or *ATE*:
+
+$$
+\begin{aligned}
+ATE &= E[\delta_i] \\
+&= E[Y_i(1)] - E[Y_i(0)] \\
+&= E[Y_i(1) - Y_i(0)]
+\end{aligned}
+$$
+Now, when we average over individual treatment effects, this isn't fixing the fundamental problem of causal inference (we still can't observe the parallel universe to directly observe the individual treatment effects). But if we want to understand the average effect of an intervention acros everyone, then the $ATE$ is relevant.
+
+Each individual $i$ as an individual treatment effect $\delta_i = Y_i(1) - Y_i(0)$. And each unit $i$ is assigned to either treatment $(D_i = 1)$ or control $(D_i = 0)$. This means we can average the $\delta_i$ not only over the entire population like with the $ATE$ but also for the treatment and control groups separately, in other words calculate conditional averages.
+
+All we have to do is just take the $\delta_i$ together for the treated average it for the treatment group, and that gets us the Average Treatment Effect for the Treatment Group, or *ATT*. We can formally define this as:
+
+$$
+\begin{aligned}
+ATT &= E[\delta_i \mid D_i = 1] \\
+&= E[Y_i(1) - Y_i(0) \mid D_i = 1] \\
+&= E[Y_i(1) \mid D_i = 1] - E[Y_i(0)\mid D_i = 1]
+\end{aligned}
+$$
+
+If we take the $\delta_i$ together in a group for the untreated and average it for the control group, we get the Average Treatment Effect for the Untreated Group, or *ATU*.
+
+$$
+\begin{aligned}
+ATU &= E[\delta_i \mid D_i = 0] \\
+&= E[Y_i(1) - Y_i(0) \mid D_i = 0] \\
+&= E[Y_i(1) \mid D_i = 0] - E[Y_i(0) \mid D_i = 0]
+\end{aligned}
+$$
+
+### Perfect vs. bad treatment assignment
+
+Let's do an example. Let's say there are 6 students in the class. 
+
+If we assign student $i$ to be in the no-phone group, then $D_i = 1$, and if we don't, then $D_i = 0$. We'll define the treatment as putting the phone away during a 15-minute study session, and the outcome as a 0–10 score on a short quiz afterward.
+
+Some students may focus better without their phones, while others may do worse if they rely on a phone-based timer, for example.
+
+Each student has two potential outcomes, $Y_i(1)$ and $Y_i(0)$, each of which corresponding to whether they were treated in different parallel universes. Potential outcomes measure each person's difference in quiz score.
+
+Let $\delta_i = Y_i(1) - Y_i(0)$, where $Y_i(1)$ is the quiz score with the phone put away and $Y_i(0)$ is the score with the phone on the desk.
+
+```{r}
+phone_data <- tibble::tribble(
+  ~Student, ~ Y1, ~Y0, 
+  "Ari",      7, 2,   
+  "Bree",     7, 8,   
+  "Cam",      7, 4, 
+  "Dev",      4, 3, 
+  "Emi",      8, 9,   
+  "Fran",    10, 10
+) |>
+  mutate(
+    Delta = Y1 - Y0,
+    D = as.integer(Delta > 0),
+    Y = D * Y1 + (1 - D) * Y0
+  )
+
+table1 <- phone_data |>
+  select(Student, Y1, Y0, Delta) |>
+  rename(
+    `Y_i(1): phone put away` = Y1,
+    `Y_i(0): phone on desk` = Y0,
+    `Delta_i: Y_i(1) - Y_i(0)` = Delta
+  )
+
+table1 |>
+  kbl(
+    format = "html",
+    caption = "Potential quiz scores and individual treatment effects",
+    align = c("l", "r", "r", "r")
+  ) |>
+  kable_styling(
+    bootstrap_options = c("striped", "condensed"),
+    full_width = FALSE,
+    position = "left"
+  )
+```
+
+We can calculate the average treatment effect using the data in the table in two ways. We can take the average of the $Y(1)$ and $Y(0)$ columns and then difference them. Or we can take the difference between $Y_i(1)$ and $Y_i(0)$ row by row and then average that. Either way we'll get the same answer.
+
+We see that the *ATE* is positive, but that not everyone benefits. When treatment effects are different across units, we say that they are "heterogeneous". That heterogeneity is aggregated because the *ATE* is just a weighted average over all the individual $i$ treatment effects $\delta_i$ and treatment effects can differ by person:
+
+```{r}
+mean(phone_data$Delta)
+```
+
+
+But what if we could know that best potential outcome? If we knew each student’s $\delta_i$ in advance, we’d have them put their phone away when $\delta_i>0$, leave it on the desk when $\delta_i<0$, and either way when $\delta_i=0$. We would assign it based on the switching equation $Y_i = Y_i(1)D_i + Y_i(0)(1 - D_i)$, and assign it based on the situation where $Y_i$ is higher:
+
+
+```{r}
+table2 <- phone_data |>
+  select(Student, Y1, Y0, Delta, D, Y) |>
+  rename(
+    `Y_i(1): phone put away` = Y1,
+    `Y_i(0): phone on desk` = Y0,
+    `Delta_i` = Delta,
+    `D_i: treated` = D,
+    `Observed Y_i` = Y
+  )
+
+table2 |>
+  kbl(
+    format = "html",
+    caption = "Potential outcomes, oracle treatment assignment, and observed quiz score",
+    align = c("l", "r", "r", "r", "r", "r")
+  ) |>
+  kable_styling(
+    bootstrap_options = c("striped", "condensed"),
+    full_width = FALSE,
+    position = "left"
+  )
+```
+
+
+Now we have the following:
+
+```{r}
+effect_summary <- tibble::tibble(
+  `Measure` = c("ATE", "ATT", "ATU"),
+  `Students or calculation` = c(
+    "All students",
+    "Students assigned to treatment (D_i = 1)",
+    "Students assigned to control (D_i = 0)"
+  ),
+  `Quiz-score points` = c(
+    mean(phone_data$Delta),
+    mean(phone_data$Delta[phone_data$D == 1]),
+    mean(phone_data$Delta[phone_data$D == 0])
+  )
+) |>
+  mutate(`Quiz-score points` = round(`Quiz-score points`, 2))
+
+effect_summary |>
+  kbl(
+    format = "html",
+    caption = "Average treatment effects and observed difference in means",
+    align = c("l", "l", "r")
+  ) |>
+  kable_styling(
+    bootstrap_options = c("striped", "condensed"),
+    full_width = FALSE,
+    position = "left"
+  )
+```
+
+
+This table is different from the above table because it's showing both potential and realized outcomes. We also notice that the *ATE* is just the weighted average between the *ATT* and the *ATU* where the weights $\pi$ are the share of people in the treatment group and $1-\pi$ are the share in the control group:
+
+$$
+\begin{aligned}
+ATE &= \pi \times ATT + (1 - \pi) \times ATU \\
+&= \frac{3}{6} \times 3 + (1-\frac{3}{6}) \times -\frac{2}{3} \\
+&= \frac{3}{2} - \frac{1}{3} \\
+&= \frac{7}{6}
+\end{aligned}
+$$
+
+So we know that the overall average effect is positive, but not for everyone. Treatment effects differ across individuals, but on average the causal effect is positive. 
+
+But how can we calculate the *ATE* if we need both potential outcomes but only have one because of the switching equation? Well, the reality is that we can't. The aggregate causal parameters can't be measured in reality, in reality we only have the last two columns of the second table. We don't have the potential outcomes, we can't see what people's lives would be like in both parallel universes!
+
+But let's say we're aliens with some sort of counter factual time machine. We average the outcomes for the no-phone group, average the outcomes for the phone group, and then difference them. This is called the Simple Difference in Mean Outcomes (SDO). 
+
+$$
+SDO = E[Y_i(1) \mid D_i = 1] - E[Y_i(0) \mid D_i = 0]
+$$
+We can estimate this using our data samples, where $N_T$ is the number of students in the no-phone group (the treated group), $N_C$ is the number of students in the phone group (the control group), and we get the realized outcomes from the switching equations.
+
+$$
+\begin{aligned}
+SDO &= \frac{1}{N_T} \sum_{i=1}^{n} (y_i \mid  d_i = 1) - \frac{1}{N_C} \sum_{i=1}^{n} (y_i \mid  d_i = 0) \\
+&= \frac{1}{3} (7 + 7 + 4) - \frac{1}{3} (8 + 9 + 10) \\
+&= 6 - 9 \\
+&= -3
+\end{aligned}
+$$
+So even though the *ATE* is positive, the *SDO* is negative! Let's take a look at our table again with all of our treatment effects:
+
+```{r}
+effect_summary <- tibble::tibble(
+  `Measure` = c("ATE", "ATT", "ATU", "SDO"),
+  `Students or calculation` = c(
+    "All students",
+    "Students assigned to treatment (D_i = 1)",
+    "Students assigned to control (D_i = 0)",
+    "Mean observed outcome for treated minus mean for control"
+  ),
+  `Quiz-score points` = c(
+    mean(phone_data$Delta),
+    mean(phone_data$Delta[phone_data$D == 1]),
+    mean(phone_data$Delta[phone_data$D == 0]),
+    mean(phone_data$Y[phone_data$D == 1]) -
+      mean(phone_data$Y[phone_data$D == 0])
+  )
+) |>
+  mutate(`Quiz-score points` = round(`Quiz-score points`, 2))
+
+effect_summary |>
+  kbl(
+    format = "html",
+    caption = "Average treatment effects and observed difference in means",
+    align = c("l", "l", "r")
+  ) |>
+  kable_styling(
+    bootstrap_options = c("striped", "condensed"),
+    full_width = FALSE,
+    position = "left"
+  )
+```
+
+The *ATE*, the average treatment effect across everyone, is positive. So being in the treatment group, the "phones away" group, improves quiz scores on average by an additional 0.67 points. 
+
+But if we look at the dataset that consists only of realized outcomes and treatment statuses:
+
+```{r}
+table3 <- phone_data |>
+  select(Student, D, Y) |>
+  rename(
+    `D_i: treated` = D,
+    `Observed Y_i` = Y
+  )
+
+table3 |>
+  kbl(
+    format = "html",
+    caption = "treatment assignment and observed quiz score",
+    align = c("l", "r", "r")
+  ) |>
+  kable_styling(
+    bootstrap_options = c("striped", "condensed"),
+    full_width = FALSE,
+    position = "left"
+  )
+```
+
+It shows that the treated group gets quiz scores of 3 points lower than their non-treated classmates on average! Weird, right? Let's dig into this a little bit more!
+
+### Decomposing a correlation into causal effects and bias
+
+Let's go back to the definition of the *ATE* as a weighted average of our two conditional average treatment effects:
+
+
+$$
+ATE = \pi \times ATT + (1 - \pi) \times ATU 
+$$
+where $\pi$ is the share of treated students and $1-\pi$ is the share of control students. 
+
+Next we'll replace *ATT* and *ATU* with their conditional expectations. Remember that *ATT* and *ATU* are just the difference between expected treatment effects for the treated group and for the untreated group, respectively:
+
+
+$$
+\begin{aligned}
+ATE &= \pi \times ATT + (1 - \pi) \times ATU \\
+&= \pi \times E[Y(1) - Y(0) \mid D = 1] + (1-\pi) \times E[Y(1) - Y(0) \mid D = 0] \\
+&= \pi \times E[Y(1) \mid D = 1] - \pi \times E[Y(0) \mid D = 1] + (1-\pi) \times E[Y(1) \mid D = 0] - (1-\pi) \times E[Y(0) \mid  D = 0] \\
+&= \left\{ \pi \times E[Y(1)\mid D = 1] + (1-\pi) \times E[Y(1)\mid D = 0] \right\} - \left\{ \pi \times E[Y(0)\mid D = 1] + (1-\pi) \times E[Y(0) \mid  D = 0] \right\}
+\end{aligned}
+$$
+
+Here there isn't the $i$ subscript because we aren't talking about individuals; we're talking about the *definition* of the *ATE* as the weighted average of the *ATT* and the *ATU*, before applying it to our actual sample data. And remember that we don't *actually* know the difference between $Y(1) - Y(0)$ for an individual given that they're in the treated group/ control group, anyway!
+
+Now I'm going to borrow a trick from Scott Cunningham to make the next bit easier. Otherwise the conditional expectations are going to start to overrun the page! Let's define the conditional expectations as follows:
+
+$$
+\begin{aligned}
+E[Y(1) \mid  D = 1] &= a \\
+E[Y(1) \mid  D = 0] &= b \\
+E[Y(0) \mid  D = 1] &= c \\
+E[Y(0) \mid  D = 0] &= d \\
+\end{aligned}
+$$
+
+Let's remind ourselves what these conditional expectations actually are by looking back at our phone treatment table. 
+
+
+```{r}
+conditional_expectations <- tibble::tibble(
+  `Conditional expectation` = c(
+    "E[Y(1) | D = 1]",
+    "E[Y(1) | D = 0]",
+    "E[Y(0) | D = 1]",
+    "E[Y(0) | D = 0]"
+  ),
+  `Group defined by D` = c(
+    "Treated",
+    "Control",
+    "Treated",
+    "Control"
+  ),
+  `Potential outcome` = c(
+    "Quiz score if phone is put away",
+    "Quiz score if phone is put away",
+    "Quiz score if phone is on the desk",
+    "Quiz score if phone is on the desk"
+  ),
+  `Symbol` = c("a", "b", "c", "d"),
+  `Observed in realized data?` = c(
+    "Yes",
+    "No",
+    "No",
+    "Yes"
+  )
+)
+
+conditional_expectations |>
+  kableExtra::kbl(
+    format = "html",
+    caption = "Potential outcomes by treatment status",
+    align = c("l", "l", "l", "c", "l")
+  ) |>
+  kableExtra::kable_styling(
+    bootstrap_options = c("striped", "condensed"),
+    full_width = FALSE,
+    position = "left"
+  )
+```
+
+
+$$
+\begin{aligned}
+E[Y(1) \mid  D = 1] &= a \\
+E[Y(1) \mid  D = 0] &= b \\
+E[Y(0) \mid  D = 1] &= c \\
+E[Y(0) \mid  D = 0] &= d \\
+\text{plus} \\
+E[Y(1)] - E[Y(0)] &= ATE \text{ (average across everyone)}
+\end{aligned}
+$$
+
+So we *actually observe* $a$ and $d$, because those are the realized outcomes for the treated group given that they're treated, and for the control group given that they're not treated. $b$ and $c$ are counterfactuals.
+
+So now let's return to the decomposition of the *ATE*. We're just going to be moving things around and adding them together, plus adding a zero to the right hand side of the equation. Adding a zero let's us rearrange and illustrate some stuff. We'll start with the definition of the *ATE* and rewrite in terms of the conditional expectations in their $a$, $b$, $c$, $d$ forms, and go from there.
+
+$$
+\begin{aligned}
+ATE &= \left\{ \pi \times E[Y(1)\mid D = 1] + (1-\pi) \times E[Y(1)\mid D = 0] \right\} - \left\{ \pi \times E[Y(0)\mid D = 1] + (1-\pi) \times E[Y(0) \mid  D = 0] \right\} \\
+&= \left\{ \pi a + (1-\pi) b \right\} - \left\{ \pi c + (1 - \pi) d \right\} \\
+&= \pi a + b - \pi b - \pi c - d + \pi d  \\
+&= \pi a + b - \pi b - \pi c - d + \pi d + (a - a) + (c - c) + (d - d) \text{ (adding zero)} \\
+0 &= ATE - \pi a - b + \pi b + \pi c + d - \pi d - a + a - c + c - d + d \\
+a - d &= ATE - \pi a - b + \pi b + \pi c + d - \pi d + a - c + c - d \\
+a - d &= ATE + (c - d) + a - \pi a - b + \pi b - c + \pi c + d - \pi d \\
+a - d &= e + (c - d) + (1 - \pi)a - (1 - \pi) b + (1 - \pi) d - (1 - \pi) c \\
+a - d &= ATE + (c - d) + (1 - \pi)(a - c) - (1 - \pi)(b - d)
+\end{aligned}
+$$
+Going back to the way we defined the conditional expectations above, we can replace $a - d$ on the left hand side of the equation with $E[Y(1) \mid D = 1] - E[Y(0) \mid D = 0$], which is the *SDO*, or the Simple Difference in Mean Outcomes between the treated and untreated groups! 
+
+This time it's expressed in potential outcomes, not realized outcomes, but since $Y = Y(1)$ if $D = 1$, we can replace potential outcomes with realized outcomes since we have those in the dataet. So $a - d$ is jut $E[Y\mid D = 1] - E[Y\mid D = 0]$, which is what we called the SDO.
+
+OK, now that the left hand side of the equation is something that we've seen before, we can go to the right hand side. Let's take a look at $a-c$. This is $E[Y(1) \mid  D = 1] - E[Y(0) \mid  D = 1]$, or the *ATT*. We remember that the *ATT* is the average treatment effect for the units in the treatment group, but not the control group.
+
+Then the *ATU* is the average treatment effect for the untreated group, or the mean of individual treatment effects for the people in the control group: $E[Y(1) D = 0] - EY(0)\mid D = 0]$, in other words $b - d$. 
+
+So we can rewrite our rearranged equation as follows:
+
+
+$$
+\begin{aligned}
+\underbrace{E[Y \mid D=1]-E[Y \mid D=0]}_{\text{SDO}}
+&=
+\underbrace{E[Y(1)]-E[Y(0)]}_{\text{ATE}} \\
+&\quad+
+\underbrace{E[Y(0)\mid D=1]-E[Y(0)\mid D=0]}_{\text{Selection bias}} \\
+&\quad+
+\underbrace{(1-\pi)(ATT-ATU)}_{\text{Heterogeneous treatment effect bias}}
+\end{aligned}
+$$
+
+So on the left side we have the *SDO*, or the average difference in *realized* outcomes between the treatment and the control groups. Then on the right hand side we have what's inside the SDO, but expressed in potential outcomes (you clearly see it in the selection bias, $EY(0)\mid D = 1]$, which is a potential outcome and not a realized outcome).
+
+This is an identity. Since we know the *SDO* (we calculated it earlier), that means we also know what the sum of the *ATE*, the selection bias, and the heterogeneous treatment effect is.
+
+Let's go back to our effects table:
+
+```{r}
+effect_summary <- tibble::tibble(
+  `Measure` = c("ATE", "ATT", "ATU", "SDO"),
+  `Students or calculation` = c(
+    "All students",
+    "Students assigned to treatment (D_i = 1)",
+    "Students assigned to control (D_i = 0)",
+    "Mean observed outcome for treated minus mean for control"
+  ),
+  `Quiz-score points` = c(
+    mean(phone_data$Delta),
+    mean(phone_data$Delta[phone_data$D == 1]),
+    mean(phone_data$Delta[phone_data$D == 0]),
+    mean(phone_data$Y[phone_data$D == 1]) -
+      mean(phone_data$Y[phone_data$D == 0])
+  )
+) |>
+  mutate(`Quiz-score points` = round(`Quiz-score points`, 2))
+
+effect_summary |>
+  kbl(
+    format = "html",
+    caption = "Average treatment effects and observed difference in means",
+    align = c("l", "l", "r")
+  ) |>
+  kable_styling(
+    bootstrap_options = c("striped", "condensed"),
+    full_width = FALSE,
+    position = "left"
+  )
+```
+
+We know the left hand side of the equation is equal to $-4$. We also know the *ATE* is equal to $0.67$. Then the difference between the two is being caused by selection bias and heterogeneous treatment effects.
+
+In this case, we're using selection bias ina slightly different way than non-representative sampling. Here is means that our two groups have different distributions (means) for a potential outcome (here $Y(0)$). So in this case, if the phone away students and the phone on desk students had different average quiz scores had they *both* been phone on desk students, then the data have selection bias and *SDO* won't equal the *ATE*.
+
+If we use our table where we could see the counterfactual outcomes, you can see that this is true.
+
+
+```{r}
+means <- phone_data |>
+  summarise(
+    a = mean(Y1[D == 1]),
+    b = mean(Y1[D == 0]),
+    c = mean(Y0[D == 1]),
+    d = mean(Y0[D == 0])
+  )
+
+conditional_expectations <- tibble::tibble(
+  `Conditional expectation` = c(
+    "E[Y(1) | D = 1]",
+    "E[Y(1) | D = 0]",
+    "E[Y(0) | D = 1]",
+    "E[Y(0) | D = 0]"
+  ),
+  `Group defined by D` = c(
+    "Treated",
+    "Control",
+    "Treated",
+    "Control"
+  ),
+  `Potential outcome` = c(
+    "Phone put away",
+    "Phone put away",
+    "Phone on desk",
+    "Phone on desk"
+  ),
+  `Symbol` = c("a", "b", "c", "d"),
+  `Mean quiz score` = round(
+    c(means$a, means$b, means$c, means$d),
+    2
+  ),
+  `Status under this assignment` = c(
+    "Observed",
+    "Counterfactual",
+    "Counterfactual",
+    "Observed"
+  )
+)
+
+conditional_expectations |>
+  kableExtra::kbl(
+    format = "html",
+    caption = "Mean potential outcomes by treatment status",
+    align = c("l", "l", "l", "c", "r", "l")
+  ) |>
+  kableExtra::kable_styling(
+    bootstrap_options = c("striped", "condensed"),
+    full_width = FALSE,
+    position = "left"
+  )
+```
+
+We can see that $E[Y(0)\mid D = 1] \neq E[Y(0)\mid D = 0]$! In our case, the difference is $3 - 9 = -6$, so our selection bias $= - 6$.
+
+Now normally we can't calculate the selection bias directly like this because we normally don't have the complete potential outcomes. If we didn't have that data, what do you think the sign on the selection bias would have been? Do you think that the "phones away" treatment group would have done worse or better on the quiz anyway, even with no treatment at all, compared to the "phones on desk" control group?
+
+Let's compare the $E[Y(0)\mid D=0]$ realized term for the control group to the $E[Y(0)\mid D = 1]$ counterfactual term for the treatment group. We see that the control group realized mean outcome is $9$, compared to the treatment group's potential outcome of $3$. With no treatment, the control group did better (again, this comparison is made possible by having fake counterfactual data).
+
+But a lot of the time, especially in medicine and similar cases, people are put in treatment groups because of some element about them. That means it's very possible (as in our case) for the selection term to be negative, because when the sickest people get a treatment, it makes something called "negative selection" (there's also positive selection). 
+
+But sorting into treatment based on treatment effects, which is exactly what we did by choosing to assign people into groups based on where their realized outcome was better, introduced this selection bias!
+
+Finally we have the heterogeneous treatment effects, $(1-\pi)(ATT-ATU)$. This is $(1-\pi)$ the difference in the returns to "phones away" for the phones away group and the "phones on desk group". So if the people in the phones away group benefit the same on average to people in the phones on desk group, then this term equals zero. We multiply the term by the share of people in the control group. 
+
+Since half the students were in the "phones on desk" group, $\pi = 0.5$. And since $ATT = 3.0$ and $ATU = -0.67$, that means that the heterogeneous treatment effects are:
+
+```{r}
+(1 - 0.5) * (3 - - 0.67)
+```
+
+So now since we have the *ATE*, the selection bias, and the heterogeneous treatment effect bias, we can make sure our equality holds:
+
+$$
+-3.0 = 1.1\overline{66} - 6.0 + 1.835 \approx -3
+$$
+So the reason why the *SDO* and the *ATE* aren't equal to each other is really because we assigned the students to the treatment or the control group based on where they'd get the higher score. That's where the bias is coming from! What would happen if we assigned students completely randomly and ignored the potential outcomes altogether?
+
+This time, instead of six students, we're going to simulate 50,000 students in a study. In one "study" we'll assign students to their treatment or control group based on where they get the higher score. In the other version we'll assign students to the treatment or control group randomly. We're going to use the same student data for each version of this.
+
+Each student's potential quiz score associated with being in the "phones away" treatment group is drawn from the normal distribution with mean $6.5$ and standard deviation of $1$. The potential quiz score for students in the "phones on desk" group is drawn from the normal distribution with a mean of $7$ and a standard deviation of $0.8$.
+
+```{r}
+set.seed(4300)
+
+n <- 50000
+
+phone_data <- tibble::tibble(
+  Student = seq_len(n),
+  Y1 = rnorm(n, mean = 7.5, sd = 1),  # phone away
+  Y0 = rnorm(n, mean = 6, sd = 0.8)   # phone on desk
+) |>
+  dplyr::mutate(
+    Delta = Y1 - Y0,
+
+    # a tie is assigned to control.
+    D1 = as.integer(Delta > 0),
+
+    # random assignment, with a 50% chance of treatment
+    D2 = rbinom(n, size = 1, prob = 0.5),
+
+    # realized outcomes under each assignment rule
+    Y_D1 = D1 * Y1 + (1 - D1) * Y0,
+    Y_D2 = D2 * Y1 + (1 - D2) * Y0
+  )
+```
+
+
+```{r}
+assignment_stats <- function(D, Y, Delta, Y0) {
+  pi <- mean(D)
+  ate <- mean(Delta)
+  att <- mean(Delta[D == 1])
+  atu <- mean(Delta[D == 0])
+
+  y0_treated <- mean(Y0[D == 1])
+  y0_control <- mean(Y0[D == 0])
+
+  selection_bias <- y0_treated - y0_control
+  heterogeneity_bias <- (1 - pi) * (att - atu)
+  decomposition <- ate + selection_bias + heterogeneity_bias
+  sdo <- mean(Y[D == 1]) - mean(Y[D == 0])
+
+  tibble::tibble(
+    ATE = ate,
+    ATT = att,
+    ATU = atu,
+    Y0_treated = y0_treated,
+    Y0_control = y0_control,
+    Selection_bias = selection_bias,
+    Treatment_share = pi,
+    Heterogeneity_bias = heterogeneity_bias,
+    Decomposition = decomposition,
+    SDO = sdo
+  )
+}
+
+oracle_stats <- assignment_stats(
+  D = phone_data$D1,
+  Y = phone_data$Y_D1,
+  Delta = phone_data$Delta,
+  Y0 = phone_data$Y0
+)
+
+random_stats <- assignment_stats(
+  D = phone_data$D2,
+  Y = phone_data$Y_D2,
+  Delta = phone_data$Delta,
+  Y0 = phone_data$Y0
+)
+
+comparison_table <- tibble::tibble(
+  Term = c(
+    "ATE: mean(Delta)",
+    "ATT: mean(Delta | D = 1)",
+    "ATU: mean(Delta | D = 0)",
+    "E[Y(0) | D = 1] (counterfactual)",
+    "E[Y(0) | D = 0] (realized)",
+    "Selection bias: E[Y(0) | D = 1] - E[Y(0) | D = 0]",
+    "Treatment share: pi",
+    "Heterogeneity bias: (1 - pi)(ATT - ATU)",
+    "Decomposition: ATE + selection bias + heterogeneity bias",
+    "SDO: E[Y | D = 1] - E[Y | D = 0]"
+  ),
+  `Oracle assignment` = round(c(
+    oracle_stats$ATE,
+    oracle_stats$ATT,
+    oracle_stats$ATU,
+    oracle_stats$Y0_treated,
+    oracle_stats$Y0_control,
+    oracle_stats$Selection_bias,
+    oracle_stats$Treatment_share,
+    oracle_stats$Heterogeneity_bias,
+    oracle_stats$Decomposition,
+    oracle_stats$SDO
+  ), 3),
+  `Random assignment` = round(c(
+    random_stats$ATE,
+    random_stats$ATT,
+    random_stats$ATU,
+    random_stats$Y0_treated,
+    random_stats$Y0_control,
+    random_stats$Selection_bias,
+    random_stats$Treatment_share,
+    random_stats$Heterogeneity_bias,
+    random_stats$Decomposition,
+    random_stats$SDO
+  ), 3)
+)
+
+comparison_table |>
+  kableExtra::kbl(
+    format = "html",
+    caption = paste(
+      "Treatment effect measures and SDO by assignment method.",
+      "Values are quiz-score points except treatment share, which is a proportion."
+    ),
+    align = c("l", "r", "r")
+  ) |>
+  kableExtra::kable_styling(
+    bootstrap_options = c("striped", "condensed"),
+    full_width = FALSE,
+    position = "left"
+  )
+```
+
+Clearly the *ATE* is the same for both the "oracle" who assigns based on where students have the better outcome and the random assignment. But that's where the similarities stop! The "oracle" version has a lot of bias, such that the *SDO* and the *ATE* aren't equal to one another. There is both selection bias and heterogeneity bias. 
+
+So why is it that in the "oracle" version $ATE \neq ATT \neq ATU \neq SDO$ but in the random version $ATE = ATT = ATU = SDO$? Randomization!
+
+
+## Randomization
+
+The "oracle" version above is the same as any process that assigns people to treatment or control groups based on whether the treatment will help them. Sorting this way creates selection bias, and the size of that bias gets bigger or smaller depending on how heterogeneous the treatment effects are across the population. By "process" that can mean a lot of things, like customers targeted by web ads to medical treatments. 
+
+And sometimes we want to sort by treatment gains! In the table above you can see that the "oracle" assignment has an *ATT* that's higher than the random experiment. But sometimes we need to randomize in order to sort out the *ATE* from the selection bias and heterogeneity bias. 
+
+What physical randomization does is that it balances everything by treatment status: observed covariates, unobserved covariates, potential outcomes, and treatment effects. That's why in the table with the randomized results the $ATE = ATT = ATU$ and the selection bias was nearly zero. 
+
+So if the treatment is assigned to units independent of potential outcomes, then the mean potential outcomes are approximately the same in the large sample, so then *that* means that treatment effects will be on average the same by treatment status. 
+
+Let's think a bit more about the implications of independence:
+
+$$
+\begin{aligned}
+E[Y(1) \mid D = 1] - E[Y(1) \mid D = 0] &= 0 \\
+E[Y(0) \mid D = 1] - E[Y(0) \mid D = 0] &= 0
+\end{aligned}
+$$
+If we remember the switching equation, $E[Y(1) \mid D = 1]$ and $E[Y(0) \mid D = 0]$ exist. But that means that $E[Y(1) \mid D = 0]$ and $E[Y(0) \mid D = 1]$ don't! Because they didn't happen! But physical randomization sets the average $Y(1)$ for the treated group (makes sense, realized outcome) *and also* for the untreated group! We can't actually check the second term because it doesn't exist, it's a counterfactual, so how does it work that physical randomization sets something that does exist equal to something that doesn't? It sounds crazy, but that's the idea of physical randomization using Neymar-Rubin's potential outcomes framework.
+
+So with physical randomization we set selection bias equal to zero:
+
+$$
+E[Y(0) \mid D = 1] - E[Y(0) \mid D = 0] = 0
+$$
+
+But what about heterogeneous treatment effects bias?
+
+Let's remember our definitions:
+
+$$
+ATT = E[Y(1) \mid D = 1] - E[Y(0) \mid D = 1] \\
+ATU = E[Y(1) \mid D = 0] - E[Y(0) \mid D = 0]
+$$
+
+and heterogeneous treatment effects bias is:
+
+$$
+(1 - \pi)(ATT - ATU)
+$$
+So if we rewrite the $ATT - ATU$ bit:
+
+$$
+\begin{aligned}
+ATT - ATU &= E[Y(1) \mid D = 1] - E[Y(0) \mid D = 1] \\
+&- E[Y(1) \mid D = 0] + E[Y(0) \mid D = 0] \\
+&= 0
+\end{aligned}
+$$
+That means that if treatment is independent of potential outcomes, then:
+
+$$
+\begin{aligned}
+E[Y_i \mid D_i = 1] - E[Y_i \mid D_i = 0] &= E[Y_i(1)] - E[Y_i(0)] \\
+SDO &= ATE
+\end{aligned}
+$$
+OK, so all of these conditional expectations are great. And it's cool that inependent implies that the two groups of units have the same potential outcome on average in the population:
+
+$$
+\begin{aligned}
+E[Y(1) \mid D = 1] - E[Y(1) \mid D = 0] &= 0 \\
+E[Y(0) \mid D = 1] - E[Y(0) \mid D = 0] &= 0
+\end{aligned}
+$$
+But how do we actually, you know, use this? Can we use it with OLS?
+
+So if an ideal randomized controlled experiment randomly assigns subjects to treatment and control groups; that would mean that the treatment level $X$ is randomly assigned.
+
+$$
+Y_i = \beta_0 + \beta_1 X_i + u_i
+$$
+So far we've been using $D$ since we're been using dummy variables, but there can be more than $0$ and $1$ options for treatment levels!
+
+Random assignment of $X_i$ implies that $E[u_i\mid X_i] = 0$, so OLS yields an unbiased and consistent estimator $\hat{\beta}_1$. 
+
+When the treatment is binary, $\hat{\beta}_1$ is just the difference in mean outcome in the treatment versus control group:
+
+$$
+\bar{Y}^{treated} - \bar{Y}^{control}
+$$
+
+
+
+
+
+This is using both the fact that $[Y_i(1), Y_i(0)]$ are independent of $X_i$ because of random assignment as well as linearity of expectations.
+
+Linearity of expectations is that the mean of the sum of two random variables is the sum of their means:
+
+$$
+E(X + Y) = E(X) + E(Y) = \mu_X + \mu_Y
+$$
+
+That means if $X_i$ is randomly assigned, the mean difference in the experimental outcomes between the two groups is the average treatment effect in the population.
+
+We can use the potential outcomes framework and translate it directly into regression notation. Let's go back to the potential outcomes framework, but this time we'll replace $D$ with $X$ to align with Stock and Watson (but remember that life is easier when you're working with a dummy variable that represents just one treatment and control group!).
+
+$$
+\begin{aligned}
+Y_i &= Y_i(1)D_i + Y_i(0)(1 - D_i) \\
+Y_i &= Y_i(1)X_i + Y_i(0)(1 - X_i) \\
+&= Y_i(1)X_i + Y_i(0) - Y_i(0)X_i \\
+&= Y_i(0) + [Y_i(1) - Y_i(0)]X_i \\
+&= E[Y_i(0)] + [Y_i(1) - Y_i(0)]X_i + [Y_i(0) - E[Y_i(0)]]
+\end{aligned}
+$$
+where the expectation is over the population distribution.
+
+If we break it down:
+
+$$
+\begin{aligned}
+Y_i
+&= E[Y_i(0)]
+&+& [Y_i(1)-Y_i(0)]X_i
+&+& [Y_i(0)-E[Y_i(0)]] \\
+&= \beta_0
+&+& \beta_{1i}X_i
+&+& u_i
+\end{aligned} 
+$$
+where
+
+$$
+\begin{aligned}
+\beta_0 &= E[Y_i(0)] \\
+\beta_{1i} &= Y_i(1) - Y_i(0) = \text{individual causal effect} \\
+u_i &= Y_i(0) - E[Y_i(0)]\text{, so } E[u_i] = 0
+\end{aligned}
+$$
+
+When there is a single treatment effect, then $\beta_{1i} = \beta_1$ and we get the usual regression model:
+
+$$
+Y_i = \beta_0 + \beta_1 X_i + u_i
+$$
+
+where $\beta_1$ is the treatment (causal) effect.
+
+Let's check this out using our phone data. We'll use the realized outcome from the random experiment.
+
+```{r}
+head(phone_data)
+```
+
+```{r, results = "asis"}
+ols_mod <- lm(Y_D2 ~ D2, data = phone_data)
+
+mk_coeftab_robust(ols_mod,
+                  mode = "simple", 
+                  caption = "phone experiment results",
+                  digits = 4,
+                  robust_type = "HC1")
+```
+
+As we can see here, the coefficient on our $D2$ coefficient, $\beta_1$, is the *ATE*!. Then the intercept is the $E[Y(0) \mid D = 0]$, just as expected.
+
+If we wanted to add more regressors to the data/ regression, we certainly could. I will leave that as an exercise for you to do with the phone data if you so wish.
+
+### The differences estimator with additional regressors.
+
+We may want to add additional control variables $W$ to our regression, which gives us the differences estimator with additional regressors:
+
+$$
+Y_i = \beta_0 + \beta_1 X_i + \beta_2 W_{1i} + \dots + \beta_{1 + r} W_{ri} + u_i, i = 1, \dots, n
+$$
+
+If $W$ helps to explain the variation in $Y$, then including it reduces the standard error of the regression and the standard error of $\hat{\beta}_1$.
+
+For the estimator $\hat{\beta}_1$ of the causal effect $\beta$ to be unbiased, the control variables $W$ must be such that $u_i$ satisfies conditional mean independence: $E(u_i \mid  X_i, W_i) = E(u_i \mid  W_i)$.
+
+This is satisfied if $W_i$ are pre-treatment individual characteristics since if they are, and $X_i$ is randomly assigned, then $X_i$ is independent of $u_i$ and $W_i$. 
+
+Randomization where the probability of assignment to the treatment group depends on one or more observable variables $W$ is called randomization based on covariates. 
+
+If randomization is based on covariates, then generally the differences estimator using simple OLS would suffer from omitted variable bias. 
+
+Because $X_i$ is randomly assigned given $W_i$, this OVB can be eliminated by using the differences estimator with the additional control variable $W_i$.
+
+# Quasi-Experiments
+
+So what do you do when you can't run a randomized experiment? You can try and find something called a quasi-experiment, or natural experiment. In this case, randomness is introduced by variations that make it look at if the treatment is randomly assigned.
+
+The hardest thing about doing a quasi-experiment is figuring out the data. I will discuss here the difference in differences estimator, but I also suggest digging deeper into regression discontinuity and instrumental variables (chapter 12).
+
+
+This is a quick manual function using `ggplot2`. There are two packages, `ggdag` and `dagitty`, that are specifically built for causal diagrams but I have never had much luck with them, though I haven't spent much time with them either. If you are planning on spending a lot of time with causal diagrams or directed acyclical graphs I recommend checking them out! But for now I'm hacking something together instead.
+
+```{r}
+plot_dag_manual <- function(nodes,
+                            edges,
+                            xlim = NULL,
+                            ylim = NULL,
+                            y_scale = 1,
+                            x_scale = 1,
+                            text_size = 5,
+                            edge_width = 0.6,
+                            arrow_length_pt = 2,
+                            shrink = 0.20,
+                            text_family = NULL) {
+  
+  nodes_scaled <- nodes |>
+    mutate(
+      x = x * x_scale,
+      y = y * y_scale
+    )
+  
+  edge_plot <- edges |>
+    left_join(nodes_scaled |> select(from = name, x, y), by = "from") |>
+    left_join(nodes_scaled |> select(to = name, xend = x, yend = y), by = "to") |>
+    mutate(
+      dx = xend - x,
+      dy = yend - y,
+      edge_length = sqrt(dx^2 + dy^2),
+      x = x + shrink * dx / edge_length,
+      y = y + shrink * dy / edge_length,
+      xend = xend - shrink * dx / edge_length,
+      yend = yend - shrink * dy / edge_length
+    )
+  
+  p <- ggplot() +
+    geom_segment(
+      data = edge_plot,
+      aes(x = x, y = y, xend = xend, yend = yend, linetype = linetype),
+      arrow = arrow(length = unit(arrow_length_pt, "pt"), type = "closed"),
+      linewidth = edge_width,
+      color = "black",
+      show.legend = FALSE
+    ) +
+    geom_text(
+      data = nodes_scaled,
+      aes(x = x, y = y, label = label),
+      size = text_size,
+      color = "black",
+      family = text_family
+    ) +
+    theme_void()
+  
+  if (!is.null(xlim) || !is.null(ylim)) {
+    p <- p + coord_cartesian(xlim = xlim, ylim = ylim, clip = "off")
+  }
+  
+  p
+}
+```
+
+## Event Studies
+
+Before we start on Difference-in-Differences, we'll quickly discuss Event Studies. This is a very old and simple (maybe the oldest and simplest) causal inference research design model. It's basically: at some point in time, an event happened. Whatever changed from before the event to after the event is the effect.
+
+So when someone has coffee at 4:00 pm and can't sleep that night, and therefore decides that coffee ruins their sleep, that's an event study. Or when someone started using a standing desk five days ago and is now experiencing less back pain, that's an event study. When a rooster concludes they’re responsible for the sun rising because it rises every morning right after they crow, that’s an event study.
+
+*Side note: [The Effect Book](https://theeffectbook.net/ch-EventStudies.html) reminded me of the 1991 movie *Rock-a-Doodle*, which I think I watched at least 50 times as a child and may have apparently set me up for a lifetime of interest in causal inference. The plot is basically: the rooster thinks his crowing is what causes the sun to rise. One morning he doesn't crow and the sun rises anyway, plot ensures.*
+
+All of these are doing the following: “Compare outcomes before vs. after an event and attribute the difference to the event.”
+
+### Intuition behind event studies
+
+Event studies are supposed to work in cases where the causal diagram looks like the one below. So at some given point, we move from the "before" period to the "after" period of the event, and a treatment goes into effect. 
+
+Here we have 
+
+* $Outcome$: the treatment effect we're interested in, the dependent variable,
+
+* $Treatment$: actual exposure, the causal variable,
+
+* $AfterEvent$: a post-period timing indicator, equal to 1 after the event has occurred, and
+
+* $Time$: calendar time, a confounder.
+
+
+```{r, fig.alt = "Causal diagram for event studies."}
+nodes_event <- tibble(
+  name  = c("Time", "AfterEvent", "Treatment", "Outcome"),
+  label = c("Time", "AfterEvent", "Treatment", "Outcome"),
+  x     = c(2.0, 0.0, 2.0, 4.2),
+  y     = c(1, 0.0, 0.0, 0.0)
+)
+
+edges_event <- tibble(
+  from     = c("Time", "Time", "AfterEvent", "Treatment"),
+  to       = c("AfterEvent", "Outcome", "Treatment", "Outcome"),
+  linetype = c("solid", "solid", "solid", "solid")
+)
+
+plot_dag_manual(
+  nodes = nodes_event,
+  edges = edges_event,
+  xlim = c(-0.8, 4.8),
+  ylim = c(-.2, .6),
+  y_scale = .3,
+  x_scale = 1,
+  text_size = 4.5,
+  shrink = 0.5,
+  text_family = "serif"
+)
+```
+
+
+$AfterEvent$ here just means the time after the event happened, so the treatment could still be ongoing. The idea is to estimate the effect of the treatment by comparing the outcome before and after outcome: when the treatment has happened (or is still happening) to when it hasn't.
+
+Looking at the causal diagram, it's pretty easy to imagine some bad event studies. A lot of superstitions are bad event studies. Like "Ever since I updated this app, my phone battery is worse." Or "I wore this jersey and my team won, now I wear it every game." Those are both (bad) event studies. 
+
+So when we're thinking about the causal diagram we have to consider:
+
+1. Considering whether the diagram actually applies in this instance: is the treatment the only thing that changed from before the event to after the event, or is there something else going on at the same time that might be responsible for the outcomes we see? Event studies aren’t bad, but they only apply in certain situations. 
+
+2. Thinking about how the other route through $Time$ can be closed.
+
+Because of course there's another potential causal route:
+
+```{r, fig.alt = "Back door causal route for event studies"}
+nodes_line <- tibble(
+  name  = c("Treatment", "AfterEvent", "Time", "Outcome"),
+  label = c("Treatment", "AfterEvent", "Time", "Outcome"),
+  x = c(0, 1.3, 2.6, 4),
+  y     = c(0, 0, 0, 0)
+)
+
+edges_line <- tibble(
+  from     = c("Time", "AfterEvent", "Time"),
+  to       = c("AfterEvent", "Treatment", "Outcome"),
+  linetype = "solid"
+)
+
+plot_dag_manual(
+  nodes = nodes_line,
+  edges = edges_line,
+  xlim = c(-0.5, 5),
+  ylim = c(-0.3, 0.3),
+  y_scale = .6,
+  text_size = 4.5,
+  shrink = 0.45,
+  arrow_length_pt = 4,
+  text_family = "serif"
+)
+```
+
+$Time$ is "all the stuff that would have changed over time anyway." Like the rooster actually isn't responsible for the sun rising because it would have risen otherwise (see: *Rock-a-Doodle*).
+
+So $Time$ is doing two things:
+
+1. It causes the treatment (via $AfterEvent$)
+
+2. It directly affects the outcome
+
+If we don't control for time, we'll attribute changes in the outcome to treatment when they were actually just due to time passing and would have happened anyway. 
+
+So why not just control for $AfterEvent$? Because $AfterEvent \approx Treatment$. They move together perfectly:
+
+* before -> untreated
+* after -> treated
+
+So controlling for $AfterEvent$ would basically mean: “hold treatment constant while estimating the effect of treatment”, which kills the variation we need and we can’t estimate anything.
+
+We can’t compare “before vs after” directly because time itself changes outcomes, but if we hold constant the general effects of time, we can isolate the effect of crossing the event. The problem isn’t that time exists, it’s that time affects both treatment and the outcome. So instead of controlling for "after," we control for everything about time *except* the fact that the event happened.
+
+### Event Studies with Regression
+
+The basic idea is to allow the relationship between time and the outcome to change after the event.
+
+You can do this with the use of an interaction term, also known as "segmented regression."
+
+So instead of estimating two separate regressions, we estimate one model that lets us have both a different level and a different trend after the event.
+
+$$
+Outcome_t = \beta_0 + \beta_1t + \beta_2 After_t + \beta_3 (t \times After_t) + \epsilon_t
+$$
+* $t$ is the time period
+* $After_t$ is a binary indicator variable for being after the event (equal to 0 before, 1 after)
+
+This is a within-unit event study. There is only before and after the event, no comparison to a unit who *doesn't* get the event (treatment).
+
+
+**Before the event ($After = 0$)**
+
+$$
+Outcome_t = \beta_0 + \beta_1 t + \epsilon_t
+$$
+
+This is the pre-event trend
+
+* Intercept: $\beta_0$
+* Slope: $\beta_1$
+
+**After the event ($After = 1$)**
+
+$$
+Outcome_t = (\beta_0 + \beta_2) + (\beta_1 + \beta_3) t + \epsilon_t
+$$
+
+This is the post-event trend
+
+* Intercept shifts by $\beta_2$
+* Slope changes by $\beta_3$
+
+#### Interpretation
+
+* $\beta_2 =$ immediate change at the time of the event
+* $\beta_3 =$ change in trend after the event
+
+The question is, are thing suddenly different? Answer this using $\beta_2$. Then the question is, are they changing differently over time? Answer this using $\beta_3$.
+
+We’re asking, did something change at the event, and did the trajectory change afterward? Basically, the question is: what happens at each time, relative to treatment?
+
+So we're estimating one line before the event and one line after the event, and allowing them to shift up or down (level change) and/ or to tilt differently (trend change). 
+
+
+### Event Study (single unit) Example
+
+Event studies are popular in stock market studies, especially when the outcome that is of interest is the stock's return. 
+
+This is because a stock's price should already reflect the public knowledge about a company, so returns should vary from day to day or as the market changes overall, but should only change sharply if there's some sort of event (new information revealed about the company). You see this a lot for mergers: if a company announces they're planning a merger, even though that merger won't happen for a while, investors buy and sell based on what they anticipate will happen so effects on stock prices will be seen right away.
+
+I mention this because you see these models used quite a bit in finance, but (to be perfectly honest) I'm not that interested in finance, so I'm going to look at another example of an event study. 
+
+[This is a paper that uses segmented regression](https://unomaha.primo.exlibrisgroup.com/permalink/01UON_OMA/6h791u/cdi_pubmed_primary_24943919) to look at changes in in pre-hospital ambulance care given the introduction of a new collaborative intervention administered during ambulance care. It's the same model that's covered in [The Effect Book](https://theeffectbook.net/ch-EventStudies.html), so I'm going to use a similar idea as inspiration for the similation we'll do.
+
+#### Model setup: Arrival time to EKG
+
+I'm going to use a similar kind of set-up but with simulated data and a continuous dependent variable: average number of minutes from ambulance arrival to EKG for suspected heart attack patients. An EKG measures the heart’s electrical system to detect irregular rhythms, structural issues, or signs of a heart attack.
+
+A new quality improvement policy is introduced in week 20 to improve emergency cardiac care. Each week, the average number of minutes from ambulance arrival to EKG is observed.
+
+The model:
+
+$$
+Y_t = \beta_0 + \beta_1(Week_t - 30) + \beta_2 After_t + \beta_3 [(Week_t - 30) \times After_t] + \epsilon_t
+$$
+
+where
+
+* $Y_t =$ average minutes from arrival to ECG in week $t$
+* $Week_t - 30$ centers time at the intervention (we therefore have data for 30 weeks before the intervention and after the intervention)
+* $After_t = 0$ before the policy starts, and $After_t = 1$ after the policy starts
+
+This means that:
+
+* $\beta_1$ is the pre-intervention trend,
+* $\beta_2$ is the immediate change (up or down) at the introduction of the policy
+* $\beta_3$ is the change in trend after the introduction of the policy
+
+Let's simulate some data. Feel free to change the data generating process to update data and see the differences!
+
+```{r}
+set.seed(100)
+
+ambulance_sim <- tibble(
+  week = 1:60
+) |>
+  mutate(
+    time_centered = week - 30,
+    after = if_else(week >= 30, 1, 0),
+
+    # true coefficients for the simulation
+    beta_0 = 15,      # predicted minutes at week 30 using the pre-intervention line
+    beta_1 = -0.08,   # pre-policy trend: already getting slightly faster at getting patients to EKG 
+    beta_2 = -1.8,    # immediate improvement at policy intro 
+    beta_3 = -0.10,   # extra post-policy improvement per week
+
+    epsilon = rnorm(n(), mean = 0, sd = 1.5),
+
+    minutes_to_ekg = beta_0 +
+      beta_1 * time_centered +
+      beta_2 * after +
+      beta_3 * (time_centered * after) +
+      epsilon
+  )
+```
+
+
+#### Simulated data: model estimation and interpretation
+
+Now let's estimate our model:
+
+```{r, results = "asis"}
+mod_event <- lm(minutes_to_ekg ~ time_centered + after + time_centered:after, data = ambulance_sim)
+
+mk_coeftab(
+  mod_event,
+  mode = "simple",
+  caption = "event model: minutes to ekg",
+)
+```
+We see that the coefficient on $\beta_2$, the immediate change at the time of the policy, is not significant. We don't have evidence that there was an immediate change. But the coefficient on $\beta_3$, the interaction term, is significant, so we have evidence to reject the null that the slope of the line didn't change after the treatment. 
+
+And let's plot it:
+
+```{r, fig.alt = "Simulated interrupted time series scatterplot: minutes from ambulance arrival to EKG"}
+ggplot(ambulance_sim, aes(x = week, y = minutes_to_ekg)) +
+  geom_point(color = "lightsteelblue3") +
+  geom_vline(xintercept = 30, linetype = "dashed") +
+  geom_smooth(
+    data = subset(ambulance_sim, week < 30),
+    method = "lm", se = FALSE, color = "steelblue4"
+  ) +
+  geom_smooth(
+    data = subset(ambulance_sim, week >= 30),
+    method = "lm", se = FALSE, color = "steelblue4"
+  ) +
+  labs(
+    title = "Simulated interrupted time series: minutes from ambulance arrival to EKG",
+    x = "Week",
+    y = "Average minutes to EKG"
+  ) +
+  theme_minimal()
+```
+
+How do we interpret this?
+
+Let's remember our model setup:
+
+The model:
+
+$$
+Y_t = \beta_0 + \beta_1(Week_t - 30) + \beta_2 After_t + \beta_3 [(Week_t - 30) \times After_t] + \epsilon_t
+$$
+
+Before the policy starts, $After_t = 0$, so
+
+$$
+Y_t = \beta_0 + \beta_1(Week_t - 30) + \epsilon_t
+$$
+
+
+After the policy starts, $After_t = 1$, so
+
+$$
+Y_t = (\beta_0 + \beta_2) + (\beta_1 + \beta_3)(Week_t - 30) + \epsilon_t
+$$
+
+Then we can interpret the scenario based on our simulated data/ estimated model:
+
+```{r}
+b0 <- coef(mod_event)["(Intercept)"]
+b1 <- coef(mod_event)["time_centered"]
+b2 <- coef(mod_event)["after"]
+b3 <- coef(mod_event)["time_centered:after"]
+
+cat(" * The predicted average minutes to EKG at week 30 based on the pre-policy trend is b0:", round(b0, 2), "\n", "* Before the policy, average time to EKG was already falling by about b1 (", round(b1, 2), ") minutes per week", "\n", "* At the time the policy was introduced, average time to EKG immediately dropped by about b2 (", round(b2, 2), ") minutes", "\n", "* After the policy, the weekly trend became steeper by an additional b3 (", round(b3, 2), ") minutes per week", "\n", "* And the post-policy slope is b1 + b3 (", round(b1 + b3, 2), "), so after the policy time to EKG was decreasing by", round(b1 + b3, 2), "minutes per week instead of", round(b1, 2), "minutes per week as during the pre-policy period")
+```
+Before the policy, they were already getting a bit faster at obtaining EKGs. The policy appears to have both produced an immediate drop in average time to EKG (though that change is not significant, as $\beta_2$ from our regression isn't significant) and accelerated the rate of improvement afterward (this change is significant, based on the $\beta_3$ from the model).
+
+## Difference-in-Differences
+
+For sources, I highly recommend [Difference-in-Differences: A Practitioner's Guide](https://unomaha.primo.exlibrisgroup.com/permalink/01UON_OMA/6h791u/cdi_proquest_journals_3302228972).
+
+DiD is segmented regression with a comparison group. We'll add a treatment group, so we have a group who gets the event, and a group that doesn't (the control).
+
+Let's consider the causal diagram for a DiD model:
+
+```{r, fig.alt = "Causal diagram for difference-in-differences."}
+nodes_did <- tibble(
+  name  = c("Time", "Treatment", "Outcome", "Group"),
+  label = c("Time", "Treatment", "Outcome", "Group"),
+  x     = c(2.5, 0.0, 5.0, 2.5),
+  y     = c(1.2, 0.0, 0.0, -1.2)
+)
+
+edges_did <- tibble(
+  from     = c("Time", "Time", "Treatment", "Group", "Group"),
+  to       = c("Treatment", "Outcome", "Outcome", "Treatment", "Outcome"),
+  linetype = c("solid", "solid", "solid", "solid", "solid")
+)
+
+plot_dag_manual(
+  nodes = nodes_did,
+  edges = edges_did,
+  xlim = c(-0.6, 5.6),
+  ylim = c(-1.6, 1.6),
+  y_scale = .6,
+  text_size = 6,
+  edge_width = 0.7,
+  arrow_length_pt = 4,
+  shrink = 0.55,
+  text_family = "serif"
+)
+```
+
+The difference-in-differences model still includes time and a treatment, but now it has something else: a group that hasn't been treated, the control group. 
+
+So what we're going to do is compare the treated group to itself, before and after the treatment. And also compare the control group to itself, before and after the treated group received the treatment. This way we're trying to take the treated group and control for what would have happened in it if *only* time had happened, and not the treatment. So any extra change besides that should be the effect of the treatment.
+
+Make sure to [read the Difference-in-Differences chapter for more detail!](https://theeffectbook.net/ch-DifferenceinDifference.html?highlight=natural).
+
+We're going to add some terms to our model:
+
+* Treated group: ambulance services that adopted the quality improvement policy in week 30
+* Control group: similar ambulance services that did not adopt it during the same period
+
+We'll observe weekly average minutes to EKG for both groups.
+
+### Basic Difference-in-Differences setup
+
+We now have two dimensions, the group (treated vs. control) and the time (before vs. after). We can write it out the various dimension combinations like:
+
+* Control group, before ($t = 0$): $Y_{C, 0}$
+* Control group, after ($t = 1$): $Y_{C, 1}$
+* Treated group, before ($t = 0$): $Y_{T, 0}$
+* Treated group, after ($t = 1$): $Y_{T, 1}$
+
+**Step 1: What do we want to know?**
+
+We want to figure out the treatment effect on the treated group, so how much the treated group changed:
+
+$$
+\text{Treatment effect} = Y_{T, 1} - Y_{T, 0}
+$$
+**Step 2: The problem**
+
+If we just take the change at face value, it includes time effects. How much would the treated group have changed over time, *without* the treatment?
+
+Which means really:
+
+$$
+Y_{T, 1} - Y_{T, 0} = \text{treatment + time effects}
+$$
+to solve this, we move on to...
+
+**Step 3: Use the control group**
+
+The control group gives us:
+
+$$
+Y_{C, 1} - Y_{C, 0} = \text{time effects}
+$$
+or, what would have happened to the treatment group over time anyway, without the treatment.
+
+**Step 4: Difference-in-Differences**
+
+Which brings us to the whole "difference-in-differences" thing, which we get by subtracting the two:
+
+$$
+\text{DiD} = (\bar{Y}_{T, 1} - \bar{Y}_{T, 0}) - (\bar{Y}_{C, 1} - \bar{Y}_{1, 0})
+$$
+
+So we're comparing how the treated group changed to how the control group changed. Any change in the treated group that is difference to the change in the control group is attributed to the treatment.
+
+This gives us the basic 2x2 difference-in-differences setup:
+
+$$
+Y_{gt} = \beta_0 + \beta_1 Treated_g + \beta_2 After_t + \beta_3 (Treated_g \times After_t) + \epsilon_t
+$$
+
+where 
+
+- $Treated$ is an indicator that you're in the group being treated (whether before or after the treatment)
+
+- $After$ is an indicator that you're in the post-treatment period (whether or not you're in the treatment group)
+
+- $Treated \times After$ is an indicator for being in the treated group *and* the post treatment period, so you're being treated right now.
+
+- $\beta_0$: baseline for the control group before the policy
+
+- $\beta_1$: baseline difference between treated and control groups before the treatment
+
+- $\beta_2$: the time trend we would expect in the absence of treatment
+
+- $\beta_3$: the DiD estimate, the additional post-policy change for the treated group *beyond* what happened in the control group.
+
+You *can* extend DiD to more than two groups or time periods:
+
+$$
+Y_{it} = \alpha_i + \lambda_t + \tau Treated_{it} + \delta X_{it} + \epsilon_{it}
+$$
+where
+
+- $Y_{it}$ is the outcome for unit $i$ at time $t$
+
+- $\alpha_i$ are the group specific fixed effects (like person, company, state, etc.)
+
+- $\lambda_t$ are the time specific fixed effects (year, month, etc.)
+
+- $\tau$ is the DiD estimate
+
+- $Treated_{it}$ is the treatment indicator for unit $i$ at time $t$
+
+- $X_{it}$ are additional covariates
+
+This is the two-way fixed effects DiD model. This doesn't do well under staggered treatment adoption though, which is where we see different groups receiving treatment at different times. In those cases, it's better to use a different method like the one we'll see below with event leads/ lags. With only two time periods, the model above collapses to the 2x2 DiD model.
+
+### Parallel trends assumption
+
+The thing is, for DiD to work, before treatment $Y_{T, 0} - Y_{C, 0}$ would need to have evolved the same without the treatment. We are assuming that there is no time-variant specific unobservables that are different between the groups (treated and control).
+
+This is where the parallel trends assumption comes in. This is the key identifying assumption for DiD. We’re using the control group to answer the question, “what would have happened to the treated group if the policy hadn’t been implemented?”
+
+The parallel trends assumption says that the control group is a valid stand-in for that counterfactual.
+
+Let: 
+
+- $Y_{it}(0)$ denote the potential outcome *without* treatment for unit *i* at time *t*
+
+- $D_i = 1$ if unit *i* is in the treatment group
+
+- $D_i = 0$ if unit *i* is in the control group
+
+We can then write the parallel trends assumption as:
+
+$$
+E[Y_{it}(0) | D_i = 1] - E[Y_{it}(0) | D_i = 0] = \Delta_0\ \text{for all }t
+$$
+
+Where $\Delta_0$ is a constant difference over time in the untreated potential outcomes between the two groups. This assumption does not require the levels of outcomes to be the same between groups, only that the difference remains constant over time.
+
+The gap between treatment and control groups in the *absence of treatment* must remain stable. The groups don't necessary have to have the same level or be identical, just the same slope over time.  If this holds, any deviation from that stable difference after the treatment can be attributed to the causal effect of the treatment. 
+
+Of course, this is the counterfactual universe that didn't actually happen, because the treated group actually was treated. We can't actually test the parallel trends assumption, just gather support for it.
+
+The parallel trends assumption basically says that, without the treatment, the treated group would have followed the same time trend as the control group.
+
+Anything that makes the treated group evolve differently even without treatment violates the parallel trends assumption. 
+
+This can include differences between the two groups pre-treatment (the slopes were already different). It can also include group-specific shocks at the same time (like if the treated group gets a treatment *and* more funding to carry out the policy at the same time, you'd likely give too much credit to the policy.) There can also be composition changes, like if the treated group starts treating more severe cases over time (if we stick to the hospital example). 
+
+If any of these things aren't true, our estimator is biased. If we remember our DiD formula:
+
+$$
+\text{DiD} = (Y_{T, 1} - Y_{T, 0}) - Y_{C, 1} - Y_{1, 0}
+$$
+
+We're subtracting
+
+$$
+Y_{C, 1} - Y_{1, 0}
+$$
+
+because we assume it equals the treated group's time trend **without the treatment**. If this is wrong, our DiD estimate is biased.
+
+If the treated group was already improving faster, DiD will overstate the treatment effect. If the treated group was already getting worse, it will understate the effect. 
+
+We can't test the assumption directly, but we can look for evidence. Plotting both groups before treatment and seeing if the slopes are roughly parallel is good news; seeing diverging trends before the treatment is not good news for this assumption.
+
+If pre-treatment trends diverge, this threatens validity. If the trends converge, there may be policy effects to consider.
+
+Here's the thing though: even if pre-trends are parallel, other confounders could still affect the result. It is by definition untestable since we ccan't observe the counterfactual conditional expectation. We can't prove DiD is valid, we can just present evidence that supports the assumption.
+
+We'll look at another option to support the assumption besides visualization after we simulate some data.
+
+### DiD Simulation
+
+Let:
+
+* $Y_{gt} =$ average minutes from ambulance arrival to EKG for group $g$ in week $t$
+* $Treated_g = 1$ for the treated group, $= 0$ for the control group
+* $After_t = 1$ for week 30 and after, $= 0$ for before week 30
+
+Then the standard DiD model is:
+
+$$
+Y_{gt} = \beta_0 + \beta_1 Treated_g + \beta_2 After_t + \beta_3 (Treated_g \times After_t) + \epsilon_t
+$$
+
+where:
+
+* $\beta_0$: baseline average minutes to EKG for the control group before the policy
+* $\beta_1$: baseline difference between treated and control groups before the policy
+* $\beta_2$: change over time for the control group after week 30
+* $\beta_3$: the DiD estimate, the additional post-policy change for the treated group *beyond* what happened in the control group.
+
+If lower minutes are better (which they are, in this case), then a negative $\beta_3$ means the policy improved performance.
+
+#### 2x2 DiD estimation
+
+Let's simulate some data and estimate a DiD model:
+
+```{r}
+set.seed(100)
+
+b0 <- 14 # baseline control, pre-policy
+b1 <- 1.5 # treated group starts slower
+b2 <- -0.06 # both groups gradually improve over time
+b3 <- -2.0 # policy effect for treated group after week 30
+
+did_sim <- expand_grid(
+  week = 1:60,
+  treated = c(0, 1)
+) |>
+  mutate(
+    after = if_else(week >= 30, 1, 0),
+    time_centered = week - 30,
+    
+    # Data-generating process
+    epsilon = rnorm(n(), mean = 0, sd = 1.0),
+    
+    minutes_to_ekg = b0 +                
+      b1 * treated +                   
+      b2 * week +                   
+      b3 * (treated * after) +       
+      epsilon
+  )
+```
+
+Now let's estimate the model:
+
+```{r, results = "asis"}
+mod_did <- lm(minutes_to_ekg ~ treated + after + treated:after, data = did_sim)
+
+mk_coeftab(
+  mod_did,
+  mode = "simple",
+  caption = "DiD model: minutes to EKG",
+)
+```
+
+We see in this case that the coefficients are all significant at 1%, so we'll move directly on to the plotting.
+
+```{r, fig.alt = "Scatterplot of the treated and control groups pre and post treatment, time to EKG"}
+ggplot(did_sim, aes(x = week, y = minutes_to_ekg, color = factor(treated))) +
+  geom_point(alpha = 0.6) +
+  geom_vline(xintercept = 30, linetype = "dashed") +
+  
+  # BEFORE
+  geom_smooth(
+    data = subset(did_sim, week < 30),
+    method = "lm", se = FALSE, linewidth = 1.2
+  ) +
+  
+  # AFTER
+  geom_smooth(
+    data = subset(did_sim, week >= 30),
+    method = "lm", se = FALSE, linewidth = 1.2
+  ) +
+  
+  scale_color_manual(
+    values = c("seagreen4", "darkmagenta"),
+    labels = c("Control", "Treated")
+  ) +
+  labs(
+    title = "Segmented DiD: Minutes to EKG",
+    x = "Week",
+    y = "Average Minutes to EKG",
+    color = "Group"
+  ) +
+  theme_minimal()
+```
+
+Now instead of one line before and after, we have two groups. The key question that DiD is trying to answer is whether the treated group’s line shifts differently after week 30 compared to the control group. Trends look pretty parallel, which makes sense since they were simulated with the same time trend before treatment.
+
+#### Interpretation
+
+Let's go through the interpretation of the basic DiD model:
+
+```{r}
+b0 <- coef(mod_did)["(Intercept)"]
+b1 <- coef(mod_did)["treated"]
+b2 <- coef(mod_did)["after"]
+b3 <- coef(mod_did)["treated:after"]
+
+cat(" * The baseline average minutes to EKG for the control group before the policy is b0:", round(b0, 2), "minutes", "\n", "* The baseline difference between the treated and control groups before the policy is b1 (", round(b1, 2), ") minutes per week", "\n", "* The change over time for the control group after week 30 is b2 (", round(b2, 2), ") minutes", "\n", "* The DiD estimate, the additional post-policy change for the treated group beyond what happened in the control group is b3 (", round(b3, 2), ") minutes per week")
+```
+
+* $\beta_0$: baseline for the control group before the treatment
+* $\beta_0 + \beta_1$: baseline for the treated group before the treatment
+* $\beta_0 + \beta_2$: the control group after the time of the treatment
+* $\beta_0 + \beta_2 + \beta_3$: the treatment group after the time of the treatment
+
+That's why $\beta_3$ is the DiD estimate, because it's what we see after we difference out what happened to the control group. 
+
