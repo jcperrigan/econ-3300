@@ -1,11 +1,13 @@
 ---
-title: "ECON 3300"
+title: "ECON-3300"
 output:
   html_document:
     toc: yes
     toc_depth: 2
     df_print: kable
     highlight: tango
+    includes:
+      in_header: wcag-overrides.html
 ---
 
 ```{r setup, include=FALSE}

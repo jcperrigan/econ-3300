@@ -1,0 +1,402 @@
+---
+title: "In-Class Activity: Limited Dependent Variable Models with the `charity`/`gift` Data"
+author: "ECON 3300"
+output:
+  html_document:
+    toc: true
+    toc_depth: 3
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+# Packages + data
+
+Today we will use the **`charity`** data from the **`wooldridge`** package. The outcome of interest is **`respond`**, which is a binary indicator for whether a gift was made.
+
+```{r}
+need <- c("tidyverse", "wooldridge", "sandwich", "lmtest", "margins", "AER", "kableExtra")
+have <- need %in% rownames(installed.packages())
+if (any(!have)) install.packages(need[!have])
+
+invisible(lapply(need, library, character.only = TRUE))
+
+df <- charity %>%
+  as_tibble() %>%
+  mutate(
+    respond = as.integer(respond),
+    gift = if_else(is.na(gift), 0, gift)
+  )
+```
+
+# The data
+
+## Activity 1: Explore the distribution of `gift`
+
+First take a look at the dataset:
+
+```{r}
+?charity
+```
+
+
+Create a quick overview of the data.
+
+### Your tasks
+
+1. Display the dimensions of the data.
+2. Produce summary statistics for:
+   - `gift`
+   - `respond`
+   - `mailsyear`
+   - `giftlast`
+   - `avggift`
+   - `propresp`
+3. Compute the share of observations with `gift == 0`.
+4. Create a histogram of `gift`.
+
+```{r}
+source('reporting.R')
+```
+
+
+### Answer
+
+```{r}
+glimpse(df)
+dim(df)
+```
+
+```{r, results = "asis"}
+mk_dataset_summary(df)
+```
+```{r}
+ggplot(df, aes(x = gift)) +
+  geom_histogram(binwidth = 5, color = "steelblue", fill = "lightsteelblue") +
+  labs(
+    title = "distribution of gift",
+    x = "gift amount",
+    y = "count"
+  ) +
+  theme_minimal()
+```
+
+### Write-up
+
+In 2–3 sentences: what makes `gift` a good example of a limited dependent variable? What about `respond`?
+
+**Answer:**
+`gift` is bounded by zero (no negative gifts), but then a lot of the observations are exactly zero. So it's not exactly a normal continuous dependent variable because there's that big pile up at zero. It seems almost like a two step process: do people decide to give a gift at all (step 1) and if so, how much (step 2)? If we want to use `gift`, probably need to take into account this two step process (OLS no). `respond` on the other hand is more of a binary dependent variable because it's yes/ no, gave a gift or didn't give a gift. 
+
+
+## Activity 2: Compare donors and non-donors
+
+Create grouped summary statistics by `respond`.
+
+### Your tasks
+
+1. Group by `respond`.
+2. Report means for:
+   - `gift`
+   - `mailsyear`
+   - `giftlast`
+   - `avggift`
+   - `propresp`
+   - `weekslast`
+3. Write 2 sentences comparing the groups.
+
+### Answer
+
+```{r}
+df %>%
+  group_by(respond) %>%
+  summarize(
+    n = n(),
+    gift = mean(gift, na.rm = TRUE),
+    giftlast = mean(giftlast, na.rm = TRUE),
+    avggift = mean(avggift, na.rm = TRUE),
+    .groups = "drop"
+  )
+```
+
+### Write-up
+
+**Answer:**
+
+People who gave in the most recent campaign also tended to give more in the past.
+
+
+# Linear Probability Model
+
+## Activity 3: Estimate an LPM for response
+
+We now model whether someone gives at all.
+
+Estimate the model
+
+
+$respond_i = \beta_0 + \beta_1 mailsyear_i + \beta_2 giftlast_i + \beta_3 avggift_i + \beta_4 propresp_i + \beta_5 weekslast_i + \beta_6 resplast_i + u_i$
+
+### Your tasks
+
+1. Estimate the model by OLS.
+2. Report coefficients with **HC1 robust SEs**.
+3. Store fitted values.
+4. Check whether any fitted values are below 0 or above 1.
+
+### Answer
+
+```{r, results = "asis"}
+lpm_mod <- lm(respond ~ mailsyear + giftlast + propresp + weekslast + avggift + resplast, data = df)
+
+
+mk_coeftab_robust(
+  lpm_mod,
+  mode = "simple",
+  caption = "Linear Probability Model",
+  robust_type = "HC1",
+  digits = 5
+)
+```
+
+coeftest(model, vcov = vcovHC(model, type = "HC1")) (need sandwich and lmtest)
+
+```{r}
+df_res <- df %>%
+  mutate(
+    yhat_lpm = fitted(lpm),
+    resid_lpm = resid(lpm)
+  )
+```
+
+```{r}
+ggplot(df_res, aes(x = yhat_lpm, y = respond)) +
+  geom_point(color = "steelblue", alpha = .2) +
+  labs(
+    x = "fitted probability",
+    y = "observed outcome (0/1)"
+  ) +
+  theme_minimal()
+  
+```
+
+
+### Write-up
+
+Why can fitted values outside $[0,1]$ be a problem in an LPM?
+
+**Answer:**
+
+It's a problem because that's not how probability works.
+
+
+
+# Binary response models
+
+## Activity 4: Estimate logit and probit
+
+Estimate logit and probit versions of the same response model.
+
+### Your tasks
+
+1. Estimate a **logit** model.
+2. Estimate a **probit** model.
+3. Report coefficients with **HC1 robust SEs**.
+4. Compare the signs of the coefficients across LPM, logit, and probit.
+
+Logit:
+$$
+
+P(Y=1 \mid X) = F(\beta_0 + \beta_1 X) = \frac{1}{1 + e^{-(\beta_0 + \beta_1 X)}}
+
+$$
+
+### Answer
+
+```{r, results = "asis"}
+logit_mod <- glm(respond ~ mailsyear + giftlast + propresp + weekslast + avggift + resplast, family = binomial(link = "logit"), data = df)
+
+mk_coeftab_robust(logit_mod,
+                  mode = "simple",
+                  robust_type = "HC1",
+                  digits = 5)
+
+#coeftest(logit_mod, vcov = vcovHC(logit_mod, type = "HC1))
+```
+
+A logit coefficient measures the expected change in the log odds of the dependent outcome for a one unit increase in X, holding everything else constant.
+
+```{r}
+exp(coef(logit_mod)['mailsyear'])
+```
+
+If we exponentiate the coefficient, we get the multiplicative change in the odds ratio. An odds ratio greater than 1 increases the odds of the event, less than 1 decreases the odds of the event, and equal to one means there's no effect on the odds.
+
+Odds represent the ratio of the probability that an event will happen to the probability that it won't happen:
+
+$$
+\text{Odds} = \frac{p}{1-p}
+
+$$
+Think about rolling a die: probability is successful / total. Probability of rolling a 3 = 1 success / 6 total outcomes = approx 17%.
+
+Odds are success outcomes divided by unsuccessful outcomes = 1 success / 5 failures = 1 to 5 or 0.2
+
+If you have the odds, you can solve for probability: 
+
+$$
+P = \frac{Odds}{1 + Odds}
+$$
+```{r, results = "asis"}
+probit_mod <- glm(respond ~ mailsyear + giftlast + propresp + weekslast + avggift + resplast, family = binomial(link = "probit"), data = df)
+
+mk_coeftab_robust(probit_mod,
+                  mode = "simple",
+                  robust_type = "HC1",
+                  digits = 5)
+
+#coeftest(probit_mod, vcov = vcovHC(probit_mod, type = "HC1))
+```
+
+### Write-up
+
+Do the signs line up across the three models (including LPM)? Which variables appear most important?
+
+**Answer:**
+
+Signs appear the same. Cannot directly compare coefficients because they have to go through the linking process.
+
+## Activity 5: Compute average marginal effects
+
+For both logit and probit, compute **average marginal effects** for:
+
+- `avggift`
+- `mailsyear`
+
+### Your tasks
+
+1. Use `margins()` or compute the AMEs manually.
+2. Report the AMEs.
+3. Interpret one AME in a sentence.
+
+Average marginal effects calculate the marginal effect for every individual value in the sample and then takes the sample mean. 
+
+There's also something called marginal effects at the mean and that holds all the independent variables at their sample means and then gets the marginal effect.
+
+We usually want the AME.
+
+### Answer
+
+```{r}
+# Activity 5
+summary(margins(logit_mod))
+summary(margins(probit_mod))
+
+```
+
+### Write-up
+
+Interpret the AME for `mailsyear` in probability terms.
+
+**Answer:**
+
+Each additional mailer per year is associated with a 0.047 (4.7%) increase in the probability of respond = 1.
+
+
+
+## Activity 6: Compare predicted probability curves
+
+Create one figure with **three curves** showing predicted probability of response as a function of `avggift`:
+
+- LPM
+- logit
+- probit
+
+Hold the other regressors at their sample means.
+
+### Your tasks
+
+1. Reuse or rebuild a prediction grid.
+2. Add predictions from all three models.
+3. Plot all three curves on one graph with a legend.
+
+
+probit_mod <- glm(respond ~ mailsyear +
+            propresp + weekslast + resplast, family = binomial(link = "probit"), data = df)
+            
+probit_mod <- glm(respond ~ mailsyear + giftlast + propresp + weekslast + avggift + resplast, family = binomial(link = "probit"), data = df)
+            
+### Answer
+
+```{r}
+pred_grid <- tibble(
+  avggift = seq(min(df$avggift, na.rm = TRUE),
+              quantile(df$avggift, 0.95, na.rm = TRUE),
+              length.out = 100),
+  mailsyear = mean(df$mailsyear, na.rm = TRUE),
+  propresp = mean(df$propresp, na.rm = TRUE),
+  weekslast = mean(df$weekslast, na.rm = TRUE),
+  resplast = mean(df$resplast, na.rm = TRUE),
+  giftlast = mean(df$giftlast, na.rm = TRUE)
+)
+
+pred_grid <- pred_grid %>%
+  mutate(
+    lpm = predict(lpm, newdata = pred_grid),
+    logit = predict(logit_mod, newdata = pred_grid, type = "response"),
+    probit = predict(probit_mod, newdata = pred_grid, type = "response")
+  ) %>%
+  pivot_longer(cols = c(lpm, logit, probit),
+             names_to = "model",
+             values_to = "p_hat")
+```
+
+
+```{r}
+ggplot(pred_grid, aes(x = avggift, y = p_hat, color = model)) +
+  geom_line(linewidth = 1)
+```
+
+### Write-up
+
+What is the biggest practical difference between the LPM curve and the logit/probit curves?
+
+**Answer:**
+
+
+
+
+
+
+
+# Wrap-up
+
+## Exit question
+
+Write one short paragraph comparing these four models:
+
+- LPM
+- logit
+- probit
+
+Your paragraph should address:
+
+1. what each model is trying to explain,
+2. one advantage of LPM,
+3. one reason logit/probit are often preferred for binary outcomes
+
+**Answer:**
+
+
+
+# Optional extension
+
+If you finish early, try one of these:
+
+1. Replace `avggift` with `giftlast` on the prediction graph and compare.
+2. Compute the proportion of observations predicted outside $[0,1]$ by the LPM.
+
+
+

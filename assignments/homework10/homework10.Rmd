@@ -1,0 +1,384 @@
+---
+title: "ECON-3300"
+output:
+  html_document:
+    toc: yes
+    toc_depth: 2
+    df_print: kable
+    highlight: tango
+    includes:
+      in_header: wcag-overrides.html
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+```{r}
+need <- c("tidyverse", "sandwich", "lmtest", "AER", "kableExtra")
+have <- need %in% rownames(installed.packages())
+if (any(!have)) {
+  install.packages(need[!have], repos = "https://cloud.r-project.org")
+}
+invisible(lapply(need, library, character.only = TRUE))
+```
+
+```{r}
+source('reporting.R')
+```
+
+# Homework 10
+
+## Grading rubric
+
+Grading Rubric (per question):
+2 points if complete and correct
+0 points otherwise
+
+## Retrieving your work
+
+This and all future homework `.Rmd` files are written in Markdown. The `.Rmd` file can be rendered as an `.html` file for easier viewing.
+
+Once you have opened the `.Rmd` file, you may begin writing your answers beneath each problem. Do not remove any of the original problems from the file, because that makes it more difficult for me to grade your assignment.
+
+## Submitting your work
+
+When you upload your files to Canvas, submit two files:
+
+1. Your reproducible document file (`.Rmd`), saved as `homework10-ID.Rmd`. For example, `homework10-jperrigan.Rmd`.
+2. Your rendered reproducible document file (`.html`), saved as `homework10-ID.html`. For example, `homework10-jperrigan.html`.
+
+Your ID is your Canvas username. It is also the text before the `@` symbol in your UNO email address. You may submit more than once; only the latest submission before the deadline will be graded. Before submitting, make sure your `.Rmd` renders to `.html`.
+
+All students are expected to complete all problems. The data for this assignment are simulated in the notebook, so no local data files are needed.
+
+## Data and setup
+
+This assignment uses simulated ambulance-station data based on the EKG example in the sample notebook. 
+
+- Each row represents one station in one week. 
+- The outcome is average minutes from ambulance arrival to EKG. 
+- Stations were randomly assigned to an early implementation slot, but not every station offered the slot adopts the protocol, and some stations without early access adopt it later. 
+- The assignment to an early implementation slot is therefore random, but protocol use is **not the same thing as randomized assignment.**
+
+The simulation includes stable differences across stations (some stations were different from each other to start with) and a common time trend. The protocol reduces time to EKG by 2 minutes in the data-generating process. Early access **is** randomly assigned and affects the outcome only by changing protocol adoption in this simulation. These features are known because we created the data. In a real study, we'd have to defend the assumptions.
+
+```{r}
+set.seed(3300)
+
+n_stations <- 100
+
+station_info <- tibble(
+  station = 1:n_stations,
+  early_access = sample(rep(c(0, 1), each = n_stations / 2)),
+  staffing_pressure = rnorm(n_stations)
+) %>%
+  mutate(
+    station_effect = 1.4 * staffing_pressure + rnorm(n(), sd = 1),
+    adopts = rbinom(
+      n(), size = 1,
+      prob = plogis(-0.6 + 2.25 * early_access - 0.7 * staffing_pressure)
+    )
+  )
+
+ekg_panel <- tidyr::crossing(
+  station = station_info$station,
+  week = 1:24
+) %>%
+  left_join(station_info, by = "station") |>
+  mutate(
+    after = as.integer(week >= 13),
+    protocol_use = after * adopts,
+    workload = rnorm(n(), mean = 0, sd = 1.2),
+    minutes_to_ekg = 14 + station_effect - 0.06 * week +
+      0.8 * workload - 2 * protocol_use + rnorm(n(), sd = 1.5)
+  ) %>%
+  select(station, week, early_access, after, protocol_use, minutes_to_ekg)
+
+# A small potential-outcomes table for Questions 2 and 3.
+toy_potential <- tibble::tribble(
+  ~station, ~Y0, ~Y1, ~D,
+  "A",       18,  15,  1,
+  "B",       15,  16,  0,
+  "C",       20,  17,  1,
+  "D",       12,  12,  0,
+  "E",       16,  14,  0,
+  "F",       22,  18,  1
+)
+
+kableExtra::kbl(
+  toy_potential,
+  format = "html",
+  caption = "Hypothetical potential EKG times and assigned protocol status",
+  col.names = c("Station", "Y(0): no protocol", "Y(1): protocol", "D: assigned protocol"),
+  align = c("l", "r", "r", "r")
+) %>%
+  kableExtra::kable_styling(full_width = FALSE)
+
+ekg_panel %>% dplyr::glimpse()
+```
+
+Before you begin, check what one row represents, what the early-access assignment means, and how minutes to EKG is measured. The `toy_potential` table is hypothetical, it shows both potential outcomes so that you can practice the calculations. In real data, we would observe only one outcome for each station.
+
+**#1** 
+
+**Problem:** Use the EKG setting to define the potential outcomes for station $i$:
+
+a. What does $Y_i(1)$ represent?
+b. What does $Y_i(0)$ represent?
+c. Define the individual treatment effect, $\delta_i$.
+d. State the outcome's units.
+
+Be clear about what “treatment” means. In this assignment, treatment is actual protocol use, not being offered early access.
+
+Your answer should be written in the code chunk below as a string assigned to `prob01`. You may also assign a placeholder and write your answer below the chunk.
+
+```{r, problem01}
+# prob01 <- 
+```
+
+***
+
+**#2** 
+
+**Problem:** Use the `toy_potential` table.
+
+a. Calculate each station's individual treatment effect, $Y_i(1)-Y_i(0)$.
+b. Calculate the Average Treatment Effect (ATE) from this six-station population.
+c. Interpret the sign of the ATE in the context of minutes to EKG.
+
+Your code should assign the individual effects and the three averages to `prob02`. Write the interpretation below the code chunk.
+
+```{r, problem02}
+# prob02 <- toy_potential %>%
+#   mutate(...)
+# Then calculate ATE
+```
+
+***
+
+**#3** 
+
+**Problem:** In `toy_potential`, `D = 1` means the station uses the protocol and `D = 0` means it does not.
+
+a. Use the switching equation
+
+$$Y_i = D_iY_i(1) + (1-D_i)Y_i(0)$$
+
+to calculate each station's realized outcome.
+b. For station A, identify the observed potential outcome and the unobserved counterfactual.
+c. Explain why having both potential-outcome columns in this teaching table does not mean we could observe both outcomes for a real station at the same time.
+
+Assign the calculated realized outcomes to `prob03`. Write your responses to part b and c below the code chunk.
+
+```{r, problem03}
+# prob03 <- toy_potential %>%
+#   mutate(realized_outcome = ...)
+```
+
+***
+
+**#4** 
+
+**Problem:** In the simulated panel, `early_access` is randomly assigned, but actual `protocol_use` is not. Stations may have different staffing pressures, management, or other things that affect both protocol adoption and EKG time.
+
+a. Explain how random assignment of early access helps make the comparison group useful.
+b. Distinguish the effect of being assigned early access from the effect of actually using the protocol.
+
+Assign your response as a string to `prob04`, or write it below the code chunk.
+
+```{r, problem04}
+# prob04 <- 
+```
+
+***
+
+**#5** 
+
+**Problem:** Use the station averages below to estimate whether average EKG time was different for stations offered early access. Complete the code to run the model, then run the code to show the HC1 robust results.
+
+In one or two sentences, say what the `early_access` estimate tells you. Does it describe the effect of the offer, or the effect of using the protocol?
+
+```{r, problem05, results = "asis"}
+post_station <- ekg_panel %>%
+  filter(after == 1) %>%
+  group_by(station, early_access) %>%
+  summarise(post_avg = mean(minutes_to_ekg), .groups = "drop")
+
+# Fill in the model using post_avg and early_access.
+#mod_itt <- lm(____, data = post_station)
+#prob05 <- mk_coeftab_robust(mod_itt, robust_type = "HC1")
+#prob05
+```
+
+***
+
+**#6** 
+
+**Problem:** Compare stations assigned early access (`early_access = 1`) with stations not assigned early access (`early_access = 0`), before and after week 13.
+
+Use the mean minutes to EKG for each of the four groups (treated group up to week 13, treated group after and including week 13, control group up to week 13, control group after and including week 13).
+
+a. Calculate the change from before to after for each assignment group.
+b. Calculate the difference-in-differences estimate.  
+
+$$
+(\bar{Y}_{1,after}-\bar{Y}_{1,before}) -
+(\bar{Y}_{0,after}-\bar{Y}_{0,before})
+$$
+c. Assign your cell means and DiD calculation to `prob06`
+d. Explain what a negative estimate would mean here. Save your explanation below the code chunk.
+
+```{r, problem06}
+cell_means <- ekg_panel %>%
+  group_by(early_access, after) %>%
+  summarise(mean_minutes = mean(minutes_to_ekg), .groups = "drop")
+
+
+# prob06 <- list(
+#   cell_means = cell_means,
+#   did_estimate = ()
+# )
+```
+
+***
+
+**#7** 
+
+**Problem:** Estimate the 2x2 DiD model using the station-week panel `ekg_panel`:
+
+$$
+Y_{it} = \beta_0 + \beta_1 EarlyAccess_i + \beta_2 After_t +
+\beta_3(EarlyAccess_i \times After_t) + u_{it}
+$$
+
+The results code uses station-clustered HC1 standard errors because each station appears in multiple weeks. Report the coefficient tests. 
+
+a. Fill in the blanks in the `mod_did` to complete the model. Then assign the coefficient tests to `prob07`.
+
+b. Identify the DiD estimate, interpret it in minutes, and compare it with your hand calculation in Question 6. Don't interpret the `early_access` coefficient as the treatment effect.
+
+
+
+```{r, problem07}
+# mod_did <- lm(..., data = ekg_panel)
+# prob07 <- lmtest::coeftest(
+#   mod_did,
+#   vcov. = sandwich::vcovCL(
+#     mod_did, cluster = ekg_panel$station, type = "HC1"
+#   )
+# )
+# coeftest_table(prob07, "Station-clustered HC1 coefficient tests for DiD")
+```
+
+***
+
+**#8** 
+
+**Problem:** DiD uses the control group's change over time as a stand-in for what would have happened to the early-access group without the offer.
+
+Look at the plot of weekly mean minutes to EKG for the two groups during the pre-period (weeks 1–12).
+a. Describe whether the pre-period patterns look reasonably similar.
+b. State the parallel-trends assumption in words, and explain why a similar pre-period plot supports the assumption without proving it.
+c. Give one possible event or difference between stations that could make the assumption fail.
+
+Assign your written response as a string to `prob08` or write it below the plot.
+
+```{r, problem08, fig.alt = "Pre-period weekly mean minutes to EKG by randomized early-access group, weeks 1 through 12."}
+pre_means <- ekg_panel %>%
+  filter(week < 13) %>%
+  group_by(week, early_access) %>%
+  summarise(mean_minutes = mean(minutes_to_ekg), .groups = "drop")
+
+ggplot(pre_means, aes(x = week, y = mean_minutes, color = factor(early_access))) +
+  geom_line() +
+  scale_color_discrete(
+    name = "Early implementation slot",
+    breaks = c("0", "1"),
+    labels = c("No", "Yes")
+  ) +
+  labs(
+    title = "Pre-period mean minutes to EKG by early-access assignment",
+    x = "Week",
+    y = "Average minutes to EKG"
+  )
+
+# prob08 <- 
+```
+***
+
+**#9** 
+
+**Problem:** There is a data frame with one observation per station with its average pre-period EKG time, average post-period EKG time, change in average EKG time, and protocol use in the post-period. 
+
+Look at the code that estimates the first-stage regression of post-period `protocol_use` on randomized `early_access` with HC1 robust coefficient tests and answer the following questions.
+
+a. Does early access predict protocol use in the expected direction?
+b. Why is a strong first stage needed for IV estimation?
+c. Does evidence of relevance by itself show that early access is a valid instrument? Explain.
+
+Assign your written responses as a string to `prob09` or write it below the plot.
+
+```{r, problem09, results = "asis"}
+station_change <- ekg_panel %>%
+  group_by(station, early_access) %>%
+  summarise(
+    pre_avg = mean(minutes_to_ekg[after == 0]),
+    post_avg = mean(minutes_to_ekg[after == 1]),
+    change_minutes = post_avg - pre_avg,
+    protocol_use = mean(protocol_use[after == 1]),
+    .groups = "drop"
+  )
+
+first_stage <- lm(protocol_use ~ early_access, data = station_change)
+
+mk_coeftab_robust(first_stage,
+                  robust_type = "HC1",
+                  caption = "first stage least squares")
+
+#prob09 <-
+```
+
+***
+
+**#10** 
+
+**Problem:** Use randomized early access as an instrument for actual protocol use in the station-level change in EKG time:
+
+$$
+\Delta Y_i = \beta_0 + \beta_1 ProtocolUse_i + u_i
+$$
+
+The two stage least squares model is estimated with `AER::ivreg()` and reported with HC1 robust coefficient tests.
+
+a. Interpret the coefficient on protocol_use in minutes.
+b. Report the F-statistic for testing whether early_access predicts protocol_use. 
+c. Assess instrument relevance using the first-stage regression from Question 9. Use chapter 12.3’s rule of thumb: an F-statistic below 10 raises concern that the instrument is weak.
+d. Explain how random assignment supports the instrument’s exogeneity. Why does that not, by itself, establish the exclusion restriction?
+e. This model has one instrument for one endogenous regressor. Explain why an overidentification test is unavailable and what would be needed to conduct one.
+
+
+Assign your written responses to parts a, c, d, and e as a string to `prob10` or write it below the plot.
+
+```{r, problem10, results = "asis"}
+mod_iv <- AER::ivreg(
+   change_minutes ~ protocol_use | early_access,
+   data = station_change
+ )
+
+mk_coeftab_robust(mod_iv,
+                  robust_type = "HC1",
+                  caption = "two stage least squares")
+
+
+#prob09_f_stat <-
+#prob10 <-
+```
+
+Before submitting, make sure you can explain these statements in your own words:
+
+- A potential outcome describes ____________________________________________.
+- Random assignment helps because ________________________________________.
+- The DiD estimate compares ______________________________________________.
+- An instrument must be relevant because __________________________________.
+- The exclusion restriction means _________________________________________.
