@@ -1,0 +1,1104 @@
+---
+title: "Prediction with Many Regressors and Big Data"
+output: 
+  html_document:
+    toc: yes
+    toc_depth: 2
+    df_print: kable
+    highlight: tango
+    includes:
+      in_header: wcag-overrides.html
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+```{r}
+need <- c("AER", "tidyverse", "plm", "sandwich", "lmtest", "knitr", "kableExtra", "grid", "broom", "fixest", "glmnet")
+have <- need %in% rownames(installed.packages())
+if (any(!have)) install.packages(need[!have])
+invisible(lapply(need, library, character.only = TRUE))
+source("reporting.R")
+```
+
+
+# The Many-Predictor Problem and OLS
+
+We've spent a lot of time talking about causal inference. But sometimes you're more interested in making a prediction, as in using data to estimate a predictive model and then applying thatmodel to new and out-of-sample observations. The goal here isn't to consider whether A causes B, but rather to consider whether A can help predict B. When looking at a prediction problem, we're not really thinking about regressors of interest and controls, but instead just predictors and the variable we're trying to predict.
+
+## Prediction with OLS
+
+If we're just got a few predictors, OLS can work well assuming the least squares assumptions for prediction hold. Denoting "out of sample" observations "oos", we want to predict $Y^{oos}$ given $X_1^{oos}, \dots, X_k^{oos}$. 
+
+As in, we have the data $X_{1i}, \dots, X_{ki}, Y_i), i = 1, \dots, n$ and we're going to use those data to estimate the regression coefficients. We then take those coefficients and apply them to the out of sample data to make predictions. The assumptions for predictions are:
+
+$$
+E(Y \mid X_1, \dots, X_k) = \beta_0 + \beta_1 X_1 + \dots + \beta_k X_k
+$$
+and
+
+$$
+u = Y - E(Y \mid X_1, \dots, X_k)
+$$
+where
+
+1. $(X_1^{oos}, \dots, X_k^{oos}, Y^{oos})$ are randomly drawn from the same population distribution as $(X_{1i}, \dots, X_{1i}, Y_i), i = 1, \dots, n$. In other words, we can't use one population to build our model and then try and make out of sample predictions on a different population.
+2. $(X_{1i}, \dots, X_{ki}, Y_i), i = 1, \dots, n$ are i.i.d. draws from their joint distribution. 
+3. Large outliers are unlikely: $X_{1i}, \dots, X_{ki}$ and $Y_i$ have nonzero finite fourth moments.
+4. No perfect multicollinearity.
+
+In this case our $\beta$'s might or might not have a causal interpretation. They're used for prediction so they still need to be defined as the coefficients of the population conditional expectation.
+
+Because we've defined the $\beta$'s as the coefficients of the linear conditional expectation, the error term has to have a conditional mean of zero. That means that the OLS estimators will be unbiased for the population slope coefficients. 
+
+Assumption 1 means that we're creating our sample out of the same population that we want to make predictions on, so our out-of-sample observations and our in-sample observations are independently drawn from the same distribution. This is a statement about external validity, basically that the in-sample model can be generalized to the out-of-sample observation of interest. That, plus the unbiasedness of the OLS estimators (from the zero conditional mean assumption) gives us the following:
+
+$$
+
+\begin{aligned}
+E(\hat{Y}^{OOS} \mid X_1^{OOS}, \dots , X_k^{OOS} = x_k^{OOS}) &= E(\hat{\beta}_0 + \hat{\beta}_1 X_1^{OOS} + \dots + \hat{\beta}_k X_k^{OOS} \mid X_1^{OOS} = x_1^{OOS}, \dots , X_k^{OOS} = x_k^{OOS}) \\
+&= E(\hat{\beta}_0 \mid X_1^{OOS} = x_1^{OOS}, \dots , X_k^{OOS} = x_k^{OOS}) + E(\hat{\beta}_1 \mid X_1^{OOS} = x_1^{OOS}, \dots , X_k^{OOS} = x_k^{OOS}) \\
+&+ \dots + E(\hat{\beta}_k \mid X_1^{OOS} = x_1^{OOS}, \dots , X_k^{OOS} = x_k^{OOS}) \\
+&= \beta_0 + \beta_1 x_1^{OOS} + \dots + \beta_k x_k^{OOS} \\
+&= E(Y^{OOS} \mid X_1^{OOS} | X_1^{OOS} = x_1^{OOS}, \dots , X_k^{OOS} = x_k)
+\end{aligned}
+$$
+Let's walk through what's happening here. We're trying to predict the value of $\hat{Y}^{OOS}$, our out-of-sample $Y$, given the fact that our $X_1^{OOS}$ is equal to the value $x_1^{OOS}$, and our $X_2^{OOS}$ is equal to the value $x_2^{OOS}$, etc. 
+
+As usual with OLS, the expected value of $Y$ given $X$ is $\beta_0 + \beta_1 X_1 + \dots + \beta_k X_k$. In this case, we now have our $\hat{\beta}$'s that we estimated using our in-sample data. But so far, we've had in-sample $X$'s and in-sample $Y$ values. We could then compare the model's fitted $\hat{Y}$ to the actual data that we had. But now we're using these out-of-sample $X$'s to predict an out-of-sample $\hat{Y}$.
+
+Given the assumptions above, the expected value of $\hat{Y}^{OOS}$ given the out-of-sample $X$ values is equal to $\beta_0 + \beta_1 x_1^{OOS} + \dots + \beta_k x_k^{OOS}$.
+
+Now, this works well if we have just a handful of predictors. But what if we have, well, more predictors? Like, hundreds or thousands of predictors? In this kind of application, OLS overfits the data and doesn't do a good job at making out-of-sample predictions. 
+
+In this case, we use something called shrinkage estimators. These estimators are biased on purpose, but they reduce the variance so much that the out-of-sample prediction accuracy is better (the bias-variance trade-off).
+
+## The Mean-Squared Prediction Error
+
+So how do we know that OLS doesn't do as good of a job at prediction as some other types of models? How will we compare model performance? We need some kind of quantitative measure of predictive accuracy.
+
+We're still going to use the squared error, but now we're going to use the error from out-of-sample predictions. Since we're squaring the error, much greater weight is given to bigger errors.
+
+The mean squared prediction error (MSPE) is the expected value of the square of the prediction error that we get when the model is used to make a prediction for an observation not in the data set:
+
+$$
+MSPE = E[Y^{OOS} - \hat{Y}(X^{OOS})]^2
+$$
+
+where $X^{OOS}$ and $Y^{OOS}$ are out-of-sample observations on $X$ and $Y$ and $\hat{Y}(x)$ is the predicted value of $Y$ for a value $x$ of the predictors.
+
+The best possible prediction when it comes to minimizing the MSPE is the conditional mean $E(Y^{OOS} \mid X^{OOS})$, which is sometimes called the oracle prediction. But this is an unknown conditional mean, because by definition the $Y$ is out-of-sample and the $X$ is out-of-sample. But it's a benchmark to use. If we were to compare it to a regression model, it's the prediction that would be made using the true (unknown) population regression coefficients. 
+
+There are two sources of prediction error in the MSPE. 
+
+1. Even if the conditional mean were known, the prediction would be imperfect since the oracle prediction makes the prediction error $Y^{OOS} - E(Y^{OOS} \mid X^{OOS})$.
+2. Also, $E(Y^{OOS} \mid X^{OOS})$ is unknown, so estimating its parameters introduces another source of error.
+
+
+## The predictive regression model with standardized regressors
+
+We're going to be using a linear regression model where all the regressors are standardized, so they've all been transformed to have mean 0 and variance 1. Plus the dependent variable is transformed to have mean 0 as well. This means that all the regression coefficients have the same units.
+
+For observation $i=1,\ldots,n$ and regressor $j=1,\ldots,k$, define the transformed variables as
+
+$$
+X_{ij}^{*}=\frac{X_{ij}-\bar X_j}{s_{X_j}},
+\qquad
+Y_i^{*}=Y_i-\bar Y,
+$$
+
+where $s_{X_j}$ is the standard deviation of regressor $j$. Thus, each $X_j^{*}$ has mean 0 and variance 1, while $Y^{*}$ has mean 0.
+
+The regression model without an intercept is
+
+$$
+Y_i^{*}=\sum_{j=1}^{k}\beta_j X_{ij}^{*}+\varepsilon_i.
+$$
+
+The mean squared prediction error (MSPE) for predictions on a sample of $m$ observations is
+
+$$
+\operatorname{MSPE}
+=
+\frac{1}{m}\sum_{i=1}^{m}
+\left(Y_i^{*}-\widehat{Y}_i^{*}\right)^2,
+\qquad
+\widehat{Y}_i^{*}=\sum_{j=1}^{k}\widehat{\beta}_jX_{ij}^{*}.
+$$
+
+If you calculate this on the training data, it is the in-sample mean squared error; on new or held-out observations, it estimates prediction error.
+
+Because $Y$ is centered but not scaled, each $\beta_j$ measures the change in $Y$-units associated with a one-standard-deviation increase in $X_j$. To express coefficients in standard-deviation units of $Y$ as well, standardize $Y$ by dividing by its standard deviation.
+
+## The idea of shrinkage
+
+A shrinkage estimator introduces bias by shrinking the OLS estimator toward a specific number and reducing the variance of the estimator. Because the mean squared error is the sum of the variance and the squared bias, if the estimator variance is reduced by enough, then the decrease in the variance can more than compensate for the increase in the squared bias. What we end up with is an estimator with a lower mean squared error than OLS.
+
+The first shrinkage estimator was developed by James and Stein in 1961. When the regressors are uncorrelated, the James-Stein estimator can be written as $\tilde{\beta}^{JS} = c \hat{\beta}$, where $\hat{beta}$ is the OLS estimator and $c$ is the shrinkage factor that is less than 1 and depends on the data. Since $c$ is less than 1, the estimator shrinks the OLS estimator toward zero and so has a lower mean squared error than the OLS estimator when the true $\beta$'s are small. 
+
+What they also showed was that, if the errors are normally distributed, their estimator has a lower mean squared error than the OLS estimator regardless of the true value of $\beta$, so long as $k \geq 3$. This is the basis of a whole family of shrinkage estimators like ridge regression and the Lasso estimator.
+
+Let $\boldsymbol{\beta}$ be the vector of $k$ true regression coefficients and $\hat{\boldsymbol{\beta}}$ the OLS estimator. The James–Stein estimator shrinks the OLS estimates toward zero:
+
+$$
+\tilde{\boldsymbol{\beta}}^{JS}
+=
+c\,\hat{\boldsymbol{\beta}},
+\qquad 0<c<1,
+$$
+
+where $c$ is determined by the data.
+
+The mean squared error for estimating the coefficient vector is
+
+$$
+\operatorname{MSE}(\tilde{\boldsymbol{\beta}}^{JS})
+=
+\operatorname{Var}(\tilde{\boldsymbol{\beta}}^{JS})
++
+\left\|\operatorname{Bias}(\tilde{\boldsymbol{\beta}}^{JS})\right\|^2.
+$$
+
+Shrinkage introduces bias, but can reduce variance enough that the total MSE is lower. Under the conditions described above, with normally distributed errors and $k\geq 3$, the James–Stein estimator has lower MSE than OLS:
+
+$$
+\operatorname{MSE}(\tilde{\boldsymbol{\beta}}^{JS})
+<
+\operatorname{MSE}(\hat{\boldsymbol{\beta}}).
+$$
+
+This comparison is for the coefficient vector as a whole.
+
+## Estimation of the MSPE
+
+The MSPE is a population expectation and so is unknown. But we can estimate it from a data sample.
+
+The first way is by dividing the data into two subsamples, one for estimation and one for prediction. The second way is called $m$-fold cross validation, where the same idea is taken but the data is split into $m$ subsamples and re-sampled.
+
+### Split sample MSPE estimation
+
+Remember that the MSPE is the variance of the prediction error for a randomly drawn $X$, where the observation is not used to estimate $\beta$. So we need to have some data to be the in-sample data, and some data to simulate the out-of-sample data.
+
+The estimation subsample is used to estimate $\beta$, giving estimate $\tilde{\beta}$ (this can be got through OLS or some other estimator). Then this estimate is used to make a prediction $\hat{Y}$ for each of the $n_{test}$ observations in the test subsample.
+
+The MSPE is then estimated using the $n_{test}$ prediction errors:
+
+$$
+\widehat{MSPE}_{split-sample} = \frac{1}{n_{test}} \sum_{\text{observations in \\ the test subsample}} (Y_i - \hat{Y}_i)^2
+$$
+
+Let's take a look at a simulation. We want to look at overfitting with some irrelevant predictors.
+
+If we look at the true model, it only has two useful regressors. But we estimate a small model and a big model with 13 extra and irrelevant regressors.
+
+The larger model will fit the estimation sample at least as well, but the test subsample will show us whether that extra complexity improves our precision:
+
+```{r}
+set.seed(3300)
+
+n_est <- 60
+n_test <- 5000
+p <- 15
+
+make_data <- function(n) {
+  X <- matrix(rnorm(n * p), nrow = n, ncol = p)
+  colnames(X) <- paste0("x", 1:p)
+
+  # only x1 and x2 actually affect y
+  y <- 1 + 1.0 * X[, 1] + 0.5 * X[, 2] + rnorm(n, sd = 1)
+
+  data.frame(y = y, X)
+}
+
+estimation_data <- make_data(n_est)
+test_data <- make_data(n_test)
+
+# estimate both models using only the estimation subsample
+small_model <- lm(y ~ x1 + x2, data = estimation_data)
+
+large_formula <- reformulate(
+  paste0("x", 1:p),
+  response = "y"
+)
+large_model <- lm(large_formula, data = estimation_data)
+
+# calculate training MSE
+mse_estimation <- c(
+  Small_model = mean(residuals(small_model)^2),
+  Large_model = mean(residuals(large_model)^2)
+)
+
+# use the estimated coefficients to predict outcomes in the test subsample
+small_predictions <- predict(small_model, newdata = test_data)
+large_predictions <- predict(large_model, newdata = test_data)
+
+# calculate split-sample MSPE
+mspe_test <- c(
+  Small_model = mean((test_data$y - small_predictions)^2),
+  Large_model = mean((test_data$y - large_predictions)^2)
+)
+
+results_table <- data.frame(
+  Model = c(
+    "Small model: x1 and x2",
+    "Large model: x1 through x15"
+  ),
+  `Estimation-sample MSE` = unname(mse_estimation),
+  `Test-sample MSPE` = unname(mspe_test),
+  check.names = FALSE
+)
+
+results_table %>%
+  kbl(
+    format = "html",
+    caption = "Estimation-sample fit and split-sample prediction error",
+    digits = 3,
+    align = c("l", "r", "r")
+  ) |>
+  kable_styling(
+    full_width = FALSE,
+    position = "left"
+  )
+```
+
+The larger model’s estimation-sample MSE can't be higher than the small model’s because it includes the small model’s regressors plus additional ones. Its test-sample MSPE can be higher, though, because it estimates a lot of coefficients that are zero in the data-generating process. 
+
+The estimation-sample MSE uses the same observations to estimate the coefficients and assess the model’s fit:
+
+$$
+\operatorname{MSE}_{\text{est}}
+=
+\frac{1}{n_{\text{est}}}
+\sum_{i \in \text{estimation subsample}}
+\left(Y_i-\widehat{Y}_i\right)^2.
+$$
+
+The test-sample MSPE uses observations that played no role in estimating the coefficients:
+
+$$
+\widehat{\operatorname{MSPE}}_{\text{test}}
+=
+\frac{1}{n_{\text{test}}}
+\sum_{i \in \text{test subsample}}
+\left(Y_i-\widehat{Y}_i\right)^2.
+$$
+
+The estimation-sample MSE describes fit to the actual data that we have. Because the model was fitted to those observations, it usually understates how much prediction error we would see on new observations. The test-sample MSPE estimates the out-of-sample prediction error, assuming the test observations come from the same process/ population as future observations.
+
+For the simulation, the large model includes the small model’s regressors plus 13 irrelevant ones. Adding regressors can't increase its estimation-sample MSE, but estimating those extra coefficients can add noise to its predictions. So the large model has a higher test-sample MSPE even though it fits the estimation sample better.
+
+### $m$-fold cross validation MSPE estimation
+
+When we estimate the MSPE using the split sample, we're arbitrarily splitting the observations into two subsamples and treating the data asymmetrically. But we can do better by treating the data symmetrically. 
+
+The idea here is that we create $m$ different, randomly chosen subsamples. In this method, there are $m$ separate estimates of the MSPE, each produced by sequentially leaving out one of the $m$ subsamples when estimating $\beta$ and then using that reserved subsample to estimate the MSPE.
+
+Then the $m$-fold cross validation estimator of the MSPE is the average of the $m$ subset estimators of the MSPE:
+
+$$
+\widehat{MSPE}_{\text{m-fold cross validation}} = \frac{1}{1} \sum_{i=1}^m \left( \frac{n_i}{n/m}\right) \widehat{MSPE_i}
+$$
+
+So how do you choose $m$? A larger value of $m$ produces more efficient estimators of $\beta$ because more observations are used each time $\beta$ is estimated. You could extend this to use the "leave one out" cross validation estimator, where $m = n-1$. 
+
+But a larger value of $m$ means that $\beta$ has to be estimated $m$ times. And when $k$ is large, this can take a lot of computer time. So choosing $m$ also has to take into account practical constraints on your time and your computer's time.
+
+Let's take a look at an example:
+
+```{r}
+set.seed(3301)
+
+n <- 150
+p <- 15
+m <- 5
+
+# benerate data: only x1 and x2 affect y
+X <- matrix(rnorm(n * p), nrow = n, ncol = p)
+colnames(X) <- paste0("x", seq_len(p))
+
+cv_data <- data.frame(
+  y = 1 + X[, 1] + 0.5 * X[, 2] + rnorm(n, sd = 1),
+  X
+)
+
+# randomly assign observations to five folds.
+# fold sizes will be different by at most one if n is not divisible by m.
+fold_id <- sample(rep(seq_len(m), length.out = n))
+
+small_formula <- y ~ x1 + x2
+large_formula <- reformulate(
+  paste0("x", seq_len(p)),
+  response = "y"
+)
+
+# estimate each model m times, holding out one fold each time
+fold_results <- do.call(
+  rbind,
+  lapply(seq_len(m), function(j) {
+    test_rows <- which(fold_id == j)
+
+    training_data <- cv_data[-test_rows, ]
+    test_data <- cv_data[test_rows, ]
+
+    small_fit <- lm(small_formula, data = training_data)
+    large_fit <- lm(large_formula, data = training_data)
+
+    small_predictions <- predict(small_fit, newdata = test_data)
+    large_predictions <- predict(large_fit, newdata = test_data)
+
+    data.frame(
+      Fold = j,
+      n_test = length(test_rows),
+      Small_model_MSPE = mean(
+        (test_data$y - small_predictions)^2
+      ),
+      Large_model_MSPE = mean(
+        (test_data$y - large_predictions)^2
+      )
+    )
+  })
+)
+
+
+# weight each fold's MSPE by its share of the full sample
+cv_summary <- data.frame(
+  Model = c(
+    "Small model: x1 and x2",
+    "Large model: x1 through x15"
+  ),
+  `5-fold CV MSPE` = c(
+    weighted.mean(
+      fold_results$Small_model_MSPE,
+      w = fold_results$n_test
+    ),
+    weighted.mean(
+      fold_results$Large_model_MSPE,
+      w = fold_results$n_test
+    )
+  ),
+  check.names = FALSE
+)
+
+
+fold_table <- data.frame(
+  `Held-out fold` = fold_results$Fold,
+  `Test observations` = fold_results$n_test,
+  `Small model MSPE` = fold_results$Small_model_MSPE,
+  `Large model MSPE` = fold_results$Large_model_MSPE,
+  check.names = FALSE
+)
+
+fold_table |>
+  kbl(
+    format = "html",
+    caption = "MSPE by held-out fold",
+    digits = 3,
+    align = c("r", "r", "r", "r"),
+    row.names = FALSE
+  ) |>
+  kable_styling(full_width = FALSE, position = "left")
+
+cv_summary |>
+  kbl(
+    format = "html",
+    caption = "Weighted 5-fold cross-validation MSPE by model",
+    digits = 3,
+    align = c("l", "r"),
+    row.names = FALSE
+  ) |>
+  kable_styling(full_width = FALSE, position = "left")
+```
+Each model is estimated five times, with a different fold held out for testing each time. The fold-specific MSPEs are combined using weights based on the number of observations in each test fold, so every observation contributes once to the overall estimate. Since only `x1` and `x2` affect the outcome in this simulation, we'd expect the small model to have lower cross-validation MSPE. The extra irrelevant predictors can add estimation noise and weaken out-of-sample predictions.
+
+# Ridge Regression
+
+Here we're going to talk about a method that shrinks the estimated parameter by adding to the sum of squared residuals a penalty that increases with the square of the estimated parameters. By minimizing this penalized sum of squared residuals, ridge regression introduces bias into the estimator but also reduces its variance.
+
+## Shrinkage via penalization
+
+One way to shrink the estimated coefficients toward 0 is to penalize large values of the estimate. The ridge regression estimator minimizes the penalized sum of squares, which is the sum of squared residuals plus a penalty factor that increases with the sum of the squared coefficients:
+
+$$
+S^{Ridge}(b; \lambda_{Ridge}) = \sum_{i=1}^n (Y_i - b_1 X_{1i} - \dots - b_k X_{ki})^2 + \lambda_{Ridge} \sum_{j=1}^k b_j^2
+$$
+where $\lambda_{Ridge} \geq 0$. The $\lambda_{Ridge}$ is called the ridge shrinkage parameter, and the ridge regression estimator is the value of $b$ that minimizes $S^{Ridge}(b; \lambda_{Ridge})$.
+
+The first term on the right hand side of the equation is the usual sum of squared residuals. The second term is new, and increases with the sum of the squared coefficients and is our penalty term. This penalizes the estimator for choosing a large estimate of the coefficient and shrinks the ridge regression toward 0. How much it shrinks it depends of $\lambda_{Ridge}$. If $\lambda_{Ridge} = 0$, then there isn't any shrinkage, and the ridge regression estimator equals the OLS estimator. The larger $\lambda_{Ridge}$ is, the bigger the penalty for a given value of $b$, and the greater the shrinkage of the estimator toward 0. 
+
+Since we're using standardized predictive regression models, all of the coefficients have the same units so we can use a single shrinkage parameter.
+
+In the special case that the regressors are uncorrelated, the ridge regression estimator is:
+
+$$
+\hat{\beta}_j^{Ridge} = \left( \frac{1}{1 + \lambda_{Ridge} / \Sigma_{i=1}^n X_{ji}^2} \right) \hat{\beta}_j
+$$
+
+where $\hat{\beta}_j$ is the OLS estimator of $\beta_j$.
+
+## Estimation of the ridge shrinkage parameter by cross validation
+
+The ridge regression estimator depends on the shrinkage parameter $\lambda_{Ridge}$. The best strategy is choosing the parameter to minimize the estimated MSPE, and we can implement this strategy using the $m$-fold cross validation process.
+
+```{r}
+set.seed(3302)
+
+n <- 100
+p <- 20
+m <- 5
+
+# Correlated predictors: each shares a common component
+common_factor <- rnorm(n)
+X <- sqrt(0.75) * matrix(common_factor, nrow = n, ncol = p) +
+  sqrt(0.25) * matrix(rnorm(n * p), nrow = n, ncol = p)
+
+colnames(X) <- paste0("x", seq_len(p))
+
+# Only the first five predictors affect y
+beta_true <- c(1.2, 0.8, -0.7, 0.5, 0.4, rep(0, p - 5))
+y <- 2 + drop(X %*% beta_true) + rnorm(n, sd = 1.5)
+
+# Candidate penalty values; lambda = 0 gives OLS
+lambda_grid <- c(0, 10^seq(-2, 3, length.out = 50))
+
+# Randomly assign observations to five folds
+fold_id <- sample(rep(seq_len(m), length.out = n))
+
+# Store one held-out prediction per observation and lambda
+cv_predictions <- matrix(
+  NA_real_,
+  nrow = n,
+  ncol = length(lambda_grid)
+)
+
+for (fold in seq_len(m)) {
+  test_rows <- which(fold_id == fold)
+  train_rows <- which(fold_id != fold)
+
+  X_train <- X[train_rows, , drop = FALSE]
+  X_test <- X[test_rows, , drop = FALSE]
+
+  # Standardize predictors using training-fold statistics only
+  x_means <- colMeans(X_train)
+  x_sds <- apply(X_train, 2, sd)
+
+  X_train_std <- scale(X_train, center = x_means, scale = x_sds)
+  X_test_std <- scale(X_test, center = x_means, scale = x_sds)
+
+  # Center y in the training fold; this leaves the intercept unpenalized
+  y_mean <- mean(y[train_rows])
+  y_train_centered <- y[train_rows] - y_mean
+
+  for (j in seq_along(lambda_grid)) {
+    lambda <- lambda_grid[j]
+
+    ridge_beta <- solve(
+      crossprod(X_train_std) + lambda * diag(p),
+      crossprod(X_train_std, y_train_centered)
+    )
+
+    cv_predictions[test_rows, j] <-
+      y_mean + drop(X_test_std %*% ridge_beta)
+  }
+}
+
+# Calculate the cross-validation MSPE for each lambda
+cv_errors <- sweep(cv_predictions, 1, y, FUN = "-")
+cv_mspe <- colMeans(cv_errors^2)
+
+cv_results <- data.frame(
+  lambda = lambda_grid,
+  CV_MSPE = cv_mspe
+)
+
+best_index <- which.min(cv_mspe)
+best_lambda <- lambda_grid[best_index]
+```
+
+```{r}
+# Standardize predictors using the full sample for the final model
+x_means <- colMeans(X)
+x_sds <- apply(X, 2, sd)
+X_std <- scale(X, center = x_means, scale = x_sds)
+
+y_mean <- mean(y)
+y_centered <- y - y_mean
+
+# OLS coefficients
+ols_fit <- lm.fit(
+  x = cbind(Intercept = 1, X_std),
+  y = y
+)
+ols_beta <- ols_fit$coefficients[-1]
+
+# Ridge coefficients using the cross-validated lambda
+ridge_beta <- solve(
+  crossprod(X_std) + best_lambda * diag(p),
+  crossprod(X_std, y_centered)
+)
+
+coefficient_comparison <- data.frame(
+  Predictor = colnames(X),
+  True_coefficient = beta_true,
+  OLS_estimate = unname(ols_beta),
+  Ridge_estimate = unname(ridge_beta)
+)
+```
+
+```{r}
+best_cv_results <- head(
+  cv_results[order(cv_results$CV_MSPE), ],
+  10
+)
+
+best_cv_table <- data.frame(
+  `Ridge penalty (lambda)` = best_cv_results$lambda,
+  `Five-fold CV MSPE` = best_cv_results$CV_MSPE,
+  check.names = FALSE
+)
+
+best_cv_table %>%
+  kbl(
+    format = "html",
+    caption = "Ten ridge penalties with the lowest five-fold cross-validation MSPE",
+    digits = 3,
+    align = c("r", "r"),
+    row.names = FALSE
+  ) |>
+  kable_styling(full_width = FALSE, position = "left")
+
+coefficient_table <- data.frame(
+  Predictor = coefficient_comparison$Predictor,
+  `True coefficient` = coefficient_comparison$True_coefficient,
+  `OLS estimate` = coefficient_comparison$OLS_estimate,
+  `Ridge estimate` = coefficient_comparison$Ridge_estimate,
+  check.names = FALSE
+)
+
+coefficient_table %>%
+  kbl(
+    format = "html",
+    caption = paste0(
+      "True coefficients and estimates; selected ridge penalty = ",
+      round(best_lambda, 3)
+    ),
+    digits = 3,
+    align = c("l", "r", "r", "r"),
+    row.names = FALSE
+  ) |>
+  kable_styling(full_width = FALSE, position = "left")
+```
+
+Cross-validation selects the penalty that gives the lowest estimated MSPE across the candidate values. With correlated predictors, OLS estimates can be unstable. Ridge trades some bias for lower coefficient variance. Unlike the Lasso (which you'll see in the next section), ridge generally shrinks coefficients without setting them exactly to zero.
+
+# Lasso
+
+## Shrinkage using Lasso
+
+The Lasso estimator minimizes a penalized sum of squares, where the penalty increases with the sum of the absolute values of the coefficients:
+
+$$
+X^{Lasso}(b, \lambda_{Lasso}) = \sum_{i=1}^n (Y_i - b_1 X_{1i} - \dots - b_k X_{ki})^2 + \lambda_{Lasso} \sum_{j=1}^k \mid b_j \mid
+
+$$
+The Lasso estimator is the value of $b$ that minimizes $X^{Lasso}(b, \lambda_{Lasso})$. As with ridge regression, if $\lambda_{Lasso} = 0$, the Lasso is just OLS. The second term penalizes large values of $b$ and shrinks the Lasso estimate toward 0.
+
+While the ridge regression penalty increases with the square of $b$, the Lasso penalty increases with its absolute value.
+
+### Why Lasso can set coefficients exactly to zero
+
+Lasso uses the absolute value of each coefficient in its penalty, $\lambda\sum_j |b_j|$. The absolute-value function has a sharp corner at zero. When a coefficient’s contribution to reducing the residual sum of squares is small relative to the penalty, the minimum can occur exactly at that corner, setting the coefficient to zero. Ridge uses a smooth squared penalty, so it generally shrinks coefficients toward zero without setting them exactly to zero.
+
+### Lasso Simulation 
+
+This simulation has 20 predictors, but only the first five affect the outcome. Five-fold cross-validation selects the Lasso penalty that minimizes estimated MSPE. `glmnet` standardizes predictors internally and returns coefficients in their original units.
+
+```{r}
+set.seed(3303)
+
+n <- 120
+p <- 20
+
+# Generate independent predictors
+X <- matrix(rnorm(n * p), nrow = n, ncol = p)
+colnames(X) <- paste0("x", seq_len(p))
+
+# Only the first five predictors affect y
+beta_true <- c(1.5, -1.2, 0.9, 0.6, -0.5, rep(0, p - 5))
+y <- 2 + drop(X %*% beta_true) + rnorm(n, sd = 1.5)
+
+# Use the same five folds when evaluating candidate penalties
+fold_id <- sample(rep(seq_len(5), length.out = n))
+
+lasso_cv <- cv.glmnet(
+  x = X,
+  y = y,
+  alpha = 1,
+  foldid = fold_id,
+  type.measure = "mse",
+  standardize = TRUE,
+  intercept = TRUE
+)
+
+# Select the penalty with the lowest cross-validation MSE
+best_lambda <- lasso_cv$lambda.min
+best_index <- which.min(abs(lasso_cv$lambda - best_lambda))
+
+lasso_fit <- glmnet(
+  x = X,
+  y = y,
+  alpha = 1,
+  lambda = best_lambda,
+  standardize = TRUE,
+  intercept = TRUE
+)
+
+# Estimate an OLS model for comparison
+sim_data <- data.frame(y = y, X)
+ols_fit <- lm(y ~ ., data = sim_data)
+
+ols_estimates <- coef(ols_fit)[colnames(X)]
+lasso_estimates <- as.numeric(coef(lasso_fit)[colnames(X), 1])
+
+# Summary of cross-validation and selected coefficients
+lasso_summary <- data.frame(
+  `Selected lambda` = best_lambda,
+  `Five-fold CV MSE` = lasso_cv$cvm[best_index],
+  `Nonzero Lasso coefficients` = sum(lasso_estimates != 0),
+  check.names = FALSE
+)
+
+lasso_summary |>
+  kbl(
+    format = "html",
+    caption = "Lasso penalty selection and model size",
+    digits = 3,
+    align = c("r", "r", "r"),
+    row.names = FALSE
+  ) |>
+  kable_styling(full_width = FALSE, position = "left")
+
+# Compare true, OLS, and Lasso coefficients
+coefficient_table <- data.frame(
+  Predictor = colnames(X),
+  `True coefficient` = beta_true,
+  `OLS estimate` = unname(ols_estimates),
+  `Lasso estimate` = lasso_estimates,
+  `Lasso status` = ifelse(
+    lasso_estimates == 0,
+    "Set to zero",
+    "Nonzero"
+  ),
+  check.names = FALSE
+)
+
+coefficient_table |>
+  kbl(
+    format = "html",
+    caption = "True coefficients and estimated coefficients",
+    digits = 3,
+    align = c("l", "r", "r", "r", "l"),
+    row.names = FALSE
+  ) |>
+  kable_styling(full_width = FALSE, position = "left")
+```
+
+`glmnet` scales its objective as $\frac{1}{2n}\text{RSS}+\lambda\sum_j|b_j|$, so its reported $\lambda$ uses a different scale from the penalty in your equation.
+
+The coefficient table shows how the cross-validated Lasso fit compares with OLS and the known coefficients used to generate the data. Predictors with Lasso estimates of exactly zero are excluded from the fitted model. The selected penalty balances fit against model sparsity (sparsity in this case refers to a condition where a high percentage of matrix cells contain zero). A zero estimate is the model’s data- and penalty-dependent selection, not proof that the predictor has no effect in every setting.
+
+## Estimation of the Lasso estimator
+
+# Principal Components Analysis
+
+When regressors are perfectly collinear, at least one of them can be dropped from the data set without any loss of information because the dropped regressor can be perfectly reconstructed from the regained regressors. This suggests that there might not be much loss of information from dropping a variable that's highly, albeit imperfectly, correlated with the other regressors.
+
+This forms the basis for principal components, which is to exploit the correlations among the regressors to reduce their number while retaining as much of the information in the original regressors as possible.
+
+## Principal Components Analysis with two variables
+
+The principal components of a set of standardized variables $X$ are linear combinations of those variables, where those combinations are chosen so that the principal components are mutually uncorrelated and sequentially contain as much of hte information in the original variables as possible. 
+
+The linear combination weights for the first principal component are chosen to maximize its variance, so it's trying to capture as much of the variable in the $X$'s as possible. The linear combination weights for the second principal component are chosen so that it is uncorrelated with the first principal component and captures as much of the variance of the $X$'x as possible, controlling for the first principal component. The third principal component is uncorelated with the first two and captures as much variance of the $X$'s as possible, controlling for the first two principal components, etc.
+
+If $k \leq n$ and there is no perfect multicollinearity, then the total number of principal components if $k$. If $k > n$, then the total number of principal components is $n$.
+
+It's easiest to see this with two $X$'s. Let's consider $X_1$ and $X_2$, with a correlation of 0.8. The first standard principal component is the weighted average, $PC_1 = w_1 X_1 + w_2 X_2$, where $w_1$ and $w_2$ are the principal component weights. Choosing the weights corresponds to choosing a direction in which to add the variables/ choosing a direction in which the spread of variables is greatest. 
+
+You want to maximize the variance of the linear combination of the variables in the first principal component, and then maximize the variance of the second principal component while having it be uncorrelated with the second principal component. 
+
+You can see how, without any restrictions, the variance of the linear combination could lways be increased just by increasing the weights. So for the principal components problem to have a solution, we have to restrict the weights. We do this by requiring the sum of the squared weights to equal 1. 
+
+
+Let $X_1$ and $X_2$ be centered, standardized variables with correlation $\rho$. For weights $w_1,w_2$, a principal component is a linear combination of the variables:
+
+$$
+PC = w_1X_1+w_2X_2.
+$$
+
+Its variance is
+
+$$
+\operatorname{Var}(PC)
+=
+w_1^2+w_2^2+2\rho w_1w_2.
+$$
+
+We require the weights to have unit length, $w_1^2+w_2^2=1$, so that the variance cannot be increased simply by making the weights larger. The first component chooses weights to maximize this variance:
+
+$$
+\max_{w_1,w_2}
+\quad w_1^2+w_2^2+2\rho w_1w_2
+\quad \text{subject to} \quad w_1^2+w_2^2=1.
+$$
+
+For $\rho=0.8$, the first two components are
+
+$$
+PC_1=\frac{1}{\sqrt{2}}X_1+\frac{1}{\sqrt{2}}X_2,
+\qquad
+PC_2=\frac{1}{\sqrt{2}}X_1-\frac{1}{\sqrt{2}}X_2.
+$$
+
+Their variances are
+
+$$
+\operatorname{Var}(PC_1)=1+\rho=1.8,
+\qquad
+\operatorname{Var}(PC_2)=1-\rho=0.2.
+$$
+
+Since the total variance is $2$, $PC_1$ explains $1.8/2=90\%$ of the total variance, and $PC_2$ explains the remaining $10\%$. The components are uncorrelated. The sign of a component’s weights can be reversed without changing the PCA solution.
+
+A couple of corrections to the draft: $PC_2$ is constrained to be uncorrelated with $PC_1$ (not with itself). Also, for centered data, the number of nonzero components is at most $\min(k,n-1)$, because centering limits the rank of the data matrix to $n-1$.
+
+### Visualize PCA with two variables
+
+The point cloud shows the observations; the two lines show the directions of the principal components. The longer spread along $PC_1$ corresponds to its larger variance.
+
+```{r}
+set.seed(3304)
+
+n_two <- 5000
+rho <- 0.8
+
+two_var_data <- data.frame(
+  X1 = rnorm(n_two)
+)
+
+two_var_data$X2 <- rho * two_var_data$X1 +
+  sqrt(1 - rho^2) * rnorm(n_two)
+
+pca_two <- prcomp(
+  two_var_data,
+  center = TRUE,
+  scale. = TRUE
+)
+
+# Standardize the plotted variables using the PCA centering and scaling
+two_var_scaled <- as.data.frame(
+  scale(
+    two_var_data,
+    center = pca_two$center,
+    scale = pca_two$scale
+  )
+)
+
+variance_share_two <- pca_two$sdev^2 / sum(pca_two$sdev^2)
+
+axis_length <- 3
+axis_data <- data.frame(
+  Component = c("PC1", "PC2"),
+  x = -axis_length * pca_two$rotation[1, 1:2],
+  y = -axis_length * pca_two$rotation[2, 1:2],
+  xend = axis_length * pca_two$rotation[1, 1:2],
+  yend = axis_length * pca_two$rotation[2, 1:2],
+  label_x = 3.25 * pca_two$rotation[1, 1:2],
+  label_y = 3.25 * pca_two$rotation[2, 1:2],
+  label = paste0(
+    c("PC1", "PC2"),
+    " (",
+    round(100 * variance_share_two[1:2], 1),
+    "%)"
+  )
+)
+```
+
+```{r, fig.alt = "principal components variance visualization"}
+ggplot(two_var_scaled, aes(x = X1, y = X2)) +
+  geom_point(alpha = 0.25, color = "gray35") +
+  geom_segment(
+    data = axis_data,
+    aes(
+      x = x, y = y, xend = xend, yend = yend,
+      color = Component
+    ),
+    inherit.aes = FALSE,
+    linewidth = 1,
+    arrow = grid::arrow(
+      ends = "both",
+      length = grid::unit(0.12, "inches")
+    )
+  ) +
+  geom_text(
+    data = axis_data,
+    aes(x = label_x, y = label_y, label = label, color = Component),
+    inherit.aes = FALSE,
+    hjust = 0,
+    show.legend = FALSE
+  ) +
+  coord_equal(xlim = c(-4, 4), ylim = c(-4, 4)) +
+  labs(
+    title = "Principal components of two correlated variables",
+    subtitle = "The component lines show the directions of greatest and second-greatest variance",
+    x = "Standardized X1",
+    y = "Standardized X2",
+    color = "Component"
+  ) +
+  theme_minimal()
+```
+
+### Simulate PCA with two variables 
+
+These tables report each component’s variance and weights, and verify that the component scores are uncorrelated. The signs of the estimated weights may differ from the formulas above because PCA can reverse a component’s direction.
+
+```{r}
+# Variance explained by each component
+two_var_eigenvalues <- pca_two$sdev^2
+two_var_proportion <- two_var_eigenvalues / sum(two_var_eigenvalues)
+
+two_var_summary <- data.frame(
+  Component = paste0("PC", seq_along(two_var_eigenvalues)),
+  Eigenvalue = two_var_eigenvalues,
+  `Variance explained (%)` = 100 * two_var_proportion,
+  `Cumulative variance explained (%)` =
+    100 * cumsum(two_var_proportion),
+  check.names = FALSE
+)
+
+two_var_summary |>
+  kbl(
+    format = "html",
+    caption = "Variance explained by the two principal components",
+    digits = 3,
+    align = c("l", "r", "r", "r"),
+    row.names = FALSE
+  ) |>
+  kable_styling(full_width = FALSE, position = "left")
+
+# Component weights, also called loadings
+two_var_loadings <- data.frame(
+  Variable = rownames(pca_two$rotation),
+  `PC1 weight` = pca_two$rotation[, 1],
+  `PC2 weight` = pca_two$rotation[, 2],
+  check.names = FALSE
+)
+
+two_var_loadings |>
+  kbl(
+    format = "html",
+    caption = "Variable weights for each principal component",
+    digits = 3,
+    align = c("l", "r", "r"),
+    row.names = FALSE
+  ) |>
+  kable_styling(full_width = FALSE, position = "left")
+
+# Correlation between the component scores
+two_var_score_correlation <- data.frame(
+  Measure = "Correlation between PC1 and PC2 scores",
+  Value = cor(pca_two$x[, 1], pca_two$x[, 2])
+)
+
+two_var_score_correlation |>
+  kbl(
+    format = "html",
+    caption = "Correlation between principal component scores",
+    digits = 3,
+    align = c("l", "r"),
+    row.names = FALSE
+  ) |>
+  kable_styling(full_width = FALSE, position = "left")
+```
+
+## Principal components with $k$ regressors
+
+Let $X$ be an $n \times k$ matrix of centered regressors. Its sample covariance matrix is
+
+$$
+S=\frac{1}{n-1}X'X.
+$$
+
+The $j$th principal component is a weighted combination of the original regressors:
+
+$$
+PC_j=Xw_j,
+$$
+
+where $w_j$ is a vector of weights. The weights are chosen sequentially: the first component has the greatest possible variance; each later component has the greatest possible variance subject to being uncorrelated with the earlier components.
+
+The weights are the eigenvectors of $S$:
+
+$$
+Sw_j=\lambda_jw_j.
+$$
+
+The corresponding eigenvalue $\lambda_j$ is the variance of component $j$. If the regressors are standardized, the proportion of their total variance explained by component $j$ is
+
+$$
+\frac{\lambda_j}{\sum_{\ell=1}^{k}\lambda_\ell}.
+$$
+
+To reduce the number of regressors, retain the first $q$ components and discard the rest. In a principal components regression, the retained component scores serve as regressors:
+
+$$
+Y_i=\alpha+\gamma_1PC_{i1}+\cdots+\gamma_qPC_{iq}+u_i.
+$$
+
+The number of nonzero components is at most $\min(k,n-1)$ when the regressors are centered. PCA uses only the regressors; it does not consider $Y$. So components explaining little variation in $X$ could still matter for predicting $Y$. When prediction is the goal, cross-validation can help choose how many components to retain.
+
+### Simulate PCA with $k$ regressors
+
+Here, eight regressors are generated from two shared underlying factors plus individual noise. The outcome depends on those factors. We estimate the PCA using the training data, then compare OLS using all eight regressors with principal components regression using the first two components. The test observations are reserved for comparing prediction errors.
+
+```{r}
+set.seed(3305)
+
+make_pc_data <- function(n) {
+  p <- 8
+  factor_1 <- rnorm(n)
+  factor_2 <- rnorm(n)
+  factor_2_loadings <- c(rep(0.7, 4), rep(-0.7, 4))
+
+  X <- sapply(
+    seq_len(p),
+    function(j) {
+      factor_1 +
+        factor_2_loadings[j] * factor_2 +
+        rnorm(n, sd = 0.7)
+    }
+  )
+
+  colnames(X) <- paste0("x", seq_len(p))
+
+  y <- 1 +
+    1.5 * factor_1 -
+    0.9 * factor_2 +
+    rnorm(n, sd = 1.2)
+
+  data.frame(y = y, X)
+}
+
+training_data <- make_pc_data(160)
+test_data <- make_pc_data(3000)
+x_names <- paste0("x", 1:8)
+
+# Estimate PCA using training regressors only
+pca_k <- prcomp(
+  training_data[, x_names],
+  center = TRUE,
+  scale. = TRUE
+)
+
+# Table of eigenvalues and explained variance
+k_eigenvalues <- pca_k$sdev^2
+k_proportion <- k_eigenvalues / sum(k_eigenvalues)
+
+k_pca_summary <- data.frame(
+  Component = paste0("PC", seq_along(k_eigenvalues)),
+  Eigenvalue = k_eigenvalues,
+  `Variance explained (%)` = 100 * k_proportion,
+  `Cumulative variance explained (%)` =
+    100 * cumsum(k_proportion),
+  check.names = FALSE
+)
+
+k_pca_summary |>
+  kbl(
+    format = "html",
+    caption = "Variance explained by principal components in the training data",
+    digits = 3,
+    align = c("l", "r", "r", "r"),
+    row.names = FALSE
+  ) |>
+  kable_styling(full_width = FALSE, position = "left")
+
+# Table of weights for the first two components
+k_loadings <- data.frame(
+  Variable = rownames(pca_k$rotation),
+  `PC1 weight` = pca_k$rotation[, 1],
+  `PC2 weight` = pca_k$rotation[, 2],
+  check.names = FALSE
+)
+
+k_loadings |>
+  kbl(
+    format = "html",
+    caption = "Regressor weights for the first two principal components",
+    digits = 3,
+    align = c("l", "r", "r"),
+    row.names = FALSE
+  ) |>
+  kable_styling(full_width = FALSE, position = "left")
+
+# OLS using all eight original regressors
+ols_k_fit <- lm(
+  reformulate(x_names, response = "y"),
+  data = training_data
+)
+
+ols_k_predictions <- predict(
+  ols_k_fit,
+  newdata = test_data
+)
+
+# Principal components regression using the first two components
+training_scores <- as.data.frame(pca_k$x[, 1:2])
+names(training_scores) <- c("PC1", "PC2")
+training_scores$y <- training_data$y
+
+pcr_fit <- lm(y ~ PC1 + PC2, data = training_scores)
+
+# Project test regressors using the PCA weights estimated on training data
+test_scores <- predict(
+  pca_k,
+  newdata = test_data[, x_names]
+)[, 1:2, drop = FALSE]
+
+test_scores <- as.data.frame(test_scores)
+names(test_scores) <- c("PC1", "PC2")
+
+pcr_predictions <- predict(
+  pcr_fit,
+  newdata = test_scores
+)
+
+# Compare test-sample prediction error
+k_model_comparison <- data.frame(
+  Model = c(
+    "OLS: all 8 original regressors",
+    "PCR: first 2 principal components"
+  ),
+  `Number of regressors` = c(8, 2),
+  `Test-sample MSPE` = c(
+    mean((test_data$y - ols_k_predictions)^2),
+    mean((test_data$y - pcr_predictions)^2)
+  ),
+  check.names = FALSE
+)
+
+k_model_comparison |>
+  kbl(
+    format = "html",
+    caption = "Test-sample prediction error for OLS and principal components regression",
+    digits = 3,
+    align = c("l", "r", "r"),
+    row.names = FALSE
+  ) |>
+  kable_styling(full_width = FALSE, position = "left")
+```
+
+
+Principal components replace correlated regressors with uncorrelated linear combinations, ordered by how much variation they explain. With two highly correlated standardized regressors, the first component captures their shared movement, while the second captures their difference. With $k$ regressors, we can retain a smaller number of components and use them in a regression.
+
+In the simulation, the first two components represent the shared patterns among the eight regressors. Compare the test-sample MSPEs to see how well the two-component model predicts relative to OLS. PCA preserves variation in the regressors, but it does not use the outcome when deciding which components to retain; cross-validation can help choose the number of components for prediction.
