@@ -1,0 +1,286 @@
+---
+title: "ECON-3300"
+output:
+  html_document:
+    toc: yes
+    toc_depth: 2
+    df_print: kable
+    highlight: tango
+    includes:
+      in_header: wcag-overrides.html
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+```{r}
+need <- c("tidyverse", "kableExtra")
+have <- need %in% rownames(installed.packages())
+if (any(!have)) {
+  install.packages(need[!have], repos = "https://cloud.r-project.org")
+}
+invisible(lapply(need, library, character.only = TRUE))
+```
+
+```{r}
+source('reporting.R')
+```
+
+# Homework 11: Prediction with Many Regressors
+
+## Grading rubric
+
+Grading Rubric (per question):
+2 points if complete and correct
+0 points otherwise
+
+## Retrieving your work
+
+This and all future homework `.Rmd` files are written in Markdown. The `.Rmd` file can be rendered as an `.html` file for easier viewing.
+
+Once you have opened the `.Rmd` file, you may begin writing your answers beneath each problem. Do not remove any of the original problems from the file, because that makes it more difficult for me to grade your assignment.
+
+## Submitting your work
+
+When you upload your files to Canvas, submit two files:
+
+1. Your reproducible document file (`.Rmd`), saved as `homework11-ID.Rmd`. For example, `homework11-jperrigan.Rmd`.
+2. Your rendered reproducible document file (`.html`), saved as `homework11-ID.html`. For example, `homework11-jperrigan.html`.
+
+Your ID is your Canvas username. It is also the text before the `@` symbol in your UNO email address. You may submit more than once; only the latest submission before the deadline will be graded. Before submitting, make sure your `.Rmd` renders to `.html`.
+
+All students are expected to complete all problems. The data for this assignment are simulated in this file, so no local data files are needed. You'll want to use the sample notebook and Chapter 14 of Stock and Watson to answer the questions.
+
+## Data and setup
+
+Suppose a college wants to predict students' end-of-semester scores out of 100. The simulated data below contain 400 students and 15 possible predictors. 
+
+Only `study_hours` and `attendance` are used to generate final scores in this simulation. The other variables are included to show what can happen when a model uses a lot of predictors.
+
+The data are divided into an estimation sample and a test sample. Use the estimation sample to fit models. Use the test sample to check how well the predictions perform on observations that weren't used to estimate the models. 
+
+The outcome and all score prediction errors are measured in final points.
+
+```{r}
+set.seed(3300)
+
+# number of students
+n <- 400
+# number of predictors
+p <- 15
+
+
+# generating a vector of random numbers from the normal distribution of length n
+common_factor <- rnorm(n, mean = 0, sd = 1)
+
+# the predictors share a common component (coming from the same student), so some are correlated.
+
+# this code is creating a matrix called X, with n rows and p columns
+# it starts by taking the vector of random numbers and creating a matrix where the first row is the first element in the vector across all p columns, the second row is the second element in the vector across all p columns, etc.
+# then it multiplies all of those elements by sqrt(0.25)
+X <- sqrt(0.25) * matrix(common_factor, nrow = n, ncol = p) +
+  
+  # now it's generating a new vector of length n * p and arranging them into a matrix with n rows and p columns, and multiplying that by the sqrt(0.75)
+  
+  # then adding the two matrices together
+  sqrt(0.75) * matrix(rnorm(n * p, mean = 0, sd = 1), nrow = n, ncol = p)
+
+# now renaming the column with "x" plus the number of the parameter
+colnames(X) <- paste0("x", seq_len(p))
+
+
+X[, "x1"] <- exp(log(8) + 0.25 * X[, "x1"])  # positive study hours, centered near 8
+
+# qlogis is the quantile function for the logistic distribution, it gives the log odds for a probability of 0.85 here
+# plogis converts log odds into a probability so keeps x2 between 0 and 1
+X[, "x2"] <- plogis(qlogis(0.85) + 0.35 * X[, "x2"])  # attendance proportion
+```
+
+```{r}
+
+# now we'll create the student data by using X
+student_data <- as_tibble(X) %>%
+  mutate(
+    study_hours = x1,
+    attendance = x2,
+    course_score = 75 + 2 * (study_hours-8) + 10 * (attendance-0.85) + rnorm(n, sd = 8),
+    student = seq_len(n)
+  ) %>%
+  select(student, course_score, study_hours, attendance, starts_with("x"))
+
+# randomly assign 70% of observations to estimation and the rest to testing.
+estimation_rows <- sample(seq_len(n), size = floor(0.70 * n))
+estimation_data <- student_data[estimation_rows, ]
+test_data <- student_data[-estimation_rows, ]
+
+# a small model uses two predictors, the larger model uses all 15 x variables.
+small_model <- lm(course_score ~ study_hours + attendance, data = estimation_data)
+large_model <- lm(course_score ~ ., data = estimation_data %>% select(course_score, starts_with("x")))
+
+# make predictions for the held-out test sample.
+small_predictions <- predict(small_model, newdata = test_data)
+large_predictions <- predict(
+  large_model,
+  newdata = test_data %>% select(starts_with("x"))
+)
+
+```
+
+**#1**
+
+**Problem:** This is a prediction problem. Define the outcome being predicted and identify the two predictors in the small model. State the units of the outcome and explain what “out of sample” means in this assignment.
+
+Assign your response as a string to `prob01`, or write it below the code chunk.
+
+```{r, problem01}
+# prob01 <-
+```
+
+***
+
+**#2**
+
+**Problem:** Explain the role of the estimation sample and the test sample. Why should the test sample not be used to estimate the model coefficients?
+
+Assign your response as a string to `prob02`, or write it below the code chunk.
+
+```{r, problem02}
+# prob02 <-
+```
+
+***
+
+**#3**
+
+**Problem:** 
+
+a. Calculate each model's estimation-sample mean squared error (MSE) and test-sample mean squared prediction error (MSPE). Use the definitions below:
+
+$$
+MSE_{est} = \frac{1}{n_{est}}\sum_{i \in est}(Y_i - \widehat{Y}_i)^2,
+\qquad
+MSPE_{test} = \frac{1}{n_{test}}\sum_{i \in test}(Y_i - \widehat{Y}_i)^2.
+$$
+
+b. Which measure is based on observations not used to estimate the model? Explain. Write your answer about which measure is out of sample below the code chunk.
+
+```{r, problem03}
+# Estimation-sample fitted values and MSE
+small_fitted <- fitted(small_model)
+large_fitted <- fitted(large_model)
+
+# Test-sample MSPE
+#small_test_mspe <- 
+#large_test_mspe <- 
+
+```
+
+
+***
+
+**#4**
+
+**Problem:** Compare the small and large models using the results from Question 3.
+
+a. Which model has the lower estimation-sample MSE?
+b. Which model has the lower test-sample MSPE?
+c. Does the model that fits the estimation sample better also predict better in the test sample? Explain briefly.
+
+Assign your response as a string to `prob04`, or write it below the code chunk.
+
+```{r, problem04}
+# prob04 <-
+```
+
+***
+
+**#5**
+
+**Problem:** The large model includes the two useful predictors from the small model plus 13 additional variables that do not directly affect the simulated course score.
+
+a. Why can adding predictors not increase the estimation-sample MSE for an OLS model that already contains the original predictors?
+b. Why might adding irrelevant predictors nevertheless increase test-sample MSPE?
+
+Assign your response as a string to `prob05`, or write it below the code chunk.
+
+```{r, problem05}
+# prob05 <-
+```
+
+***
+
+**#6**
+
+**Problem:** Chapter 14 describes shrinkage estimators that deliberately pull coefficient estimates toward zero.
+
+a. Why can adding some bias improve prediction accuracy?
+b. Explain the bias-variance trade-off in your own words.
+
+Assign your response as a string to `prob06`, or write it below the code chunk.
+
+```{r, problem06}
+# prob06 <-
+```
+
+***
+
+**#7**
+
+**Problem:** Ridge regression and the Lasso both use a penalty to shrink estimates.
+
+a. What does the ridge penalty do to large coefficients?
+b. How does the Lasso differ from ridge in what it can do to estimated coefficients?
+c. If the penalty parameter is zero, what happens to the penalized estimator?
+
+Assign your response as a string to `prob07`, or write it below the code chunk.
+
+```{r, problem07}
+# prob07 <-
+```
+
+***
+
+**#8**
+
+**Problem:** Suppose you standardize the predictors before estimating a penalized model. Explain why the same penalty could have an uneven effect if predictors are left in very different units (for example, study hours versus annual income). What sample should be used to calculate the means and standard deviations when evaluating a model with a held-out test sample?
+
+Assign your response as a string to `prob08`, or write it below the code chunk.
+
+```{r, problem08}
+# prob08 <-
+```
+
+***
+
+**#9**
+
+**Problem:** Instead of making one estimation/test split, a researcher uses five-fold cross-validation.
+
+a. Describe what happens in one fold.
+b. How are the five fold-specific prediction errors combined to estimate MSPE?
+c. Why can cross-validation be useful when the sample is not large?
+
+Assign your response as a string to `prob09`, or write it below the code chunk.
+
+```{r, problem09}
+# prob09 <-
+```
+
+***
+
+**#10**
+
+**Problem:** A college administrator sees that `study_hours` has a positive coefficient in the small-model regression and concludes that requiring every student to study one additional hour will raise their score by the coefficient amount.
+
+a. Is that conclusion warranted by a model developed for prediction? Why or why not?
+b. Suppose the small model has the lower test-sample MSPE. What does that tell the college about choosing between these two models for predicting scores?
+c. Name one reason the selected model might perform less well when used for a new group of students in a different setting.
+
+Assign your response as a string to `prob10`, or write it below the code chunk.
+
+```{r, problem10}
+# prob10 <-
+```
+
+
