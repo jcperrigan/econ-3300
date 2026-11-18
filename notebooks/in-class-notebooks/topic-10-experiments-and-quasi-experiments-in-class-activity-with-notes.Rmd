@@ -1,0 +1,370 @@
+---
+title: "In-Class Activity - Experiments and Quasi-Experiments"
+output:
+  html_document:
+    toc: yes
+    toc_depth: 2
+    df_print: kable
+    highlight: tango
+    includes:
+      in_header: wcag-overrides.html
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+```
+
+```{r packages}
+need <- c("tidyverse", "kableExtra")
+have <- need %in% rownames(installed.packages())
+if (any(!have)) install.packages(need[!have])
+invisible(lapply(need, library, character.only = TRUE))
+source("reporting.R")
+```
+
+# Experiments and Quasi-Experiments
+
+## Goals for today
+
+1. distinguish potential outcomes from realized outcomes and explain the fundamental problem of causal inference;
+2. calculate the ATE, ATT, ATU, and selection bias from a small potential-outcomes table;
+3. use random assignment to estimate a treatment effect and examine whether observed characteristics are balanced;
+4. explain why a before-and-after comparison alone may not identify a causal effect;
+5. calculate and estimate a difference-in-differences effect; and
+6. state the parallel-trends assumption in terms of the counterfactual trend.
+
+We'll use simulated data so that we know how treatment was assigned and what effects were built into the data. That lets us compare an estimate with the answer implied by the data-generating process. In a real study, we wouldn't know that answer.
+
+## 1. Potential outcomes and the fundamental problem
+
+Suppose treatment means putting a phone away during a study session. For each student, define:
+
+- $Y_i(1)$: quiz score if the phone is put away;
+- $Y_i(0)$: quiz score if the phone stays on the desk;
+- $\delta_i = Y_i(1)-Y_i(0)$: the individual treatment effect.
+
+We observe only one potential outcome for each student. The observed outcome is
+
+$$Y_i = D_iY_i(1) + (1-D_i)Y_i(0),$$
+
+where $D_i=1$ for a treated student (and $=0$ for an untreated student). The other potential outcome is counterfactual.
+
+```{r}
+phone_data <- tibble::tribble(
+  ~Student, ~Y1, ~Y0, ~D,
+  "Ari",       7,  2, 1,
+  "Bree",      7,  8, 0,
+  "Cam",       7,  4, 1,
+  "Dev",       4,  3, 1,
+  "Emi",       8,  9, 0,
+  "Fran",     10, 10, 0
+) %>%
+  mutate(
+    Delta = Y1 - Y0,
+    Y = D * Y1 + (1 - D) * Y0
+  )
+
+phone_data %>%
+  select(Student, Y1, Y0, Delta, D, Y) |>
+  rename(
+    `Potential outcome Y(1)` = Y1,
+    `Potential outcome Y(0)` = Y0,
+    `Individual effect` = Delta,
+    `Treatment assignment D` = D,
+    `Observed outcome Y` = Y
+  ) %>%
+  kbl(
+    caption = "Potential and observed quiz scores. D = 1 means the phone is put away.",
+    align = c("l", rep("r", 5))
+  ) %>%
+  kable_styling(bootstrap_options = c("striped", "condensed"), full_width = FALSE, position = "left")
+```
+
+### Task 1a
+
+Calculate the ATE, ATT, and ATU. Remember:
+
+$$ATE=E[Y(1)-Y(0)],\quad ATT=E[Y(1)-Y(0)\mid D=1],\quad ATU=E[Y(1)-Y(0)\mid D=0].$$
+
+```{r}
+# Calculate the three averages from phone_data.
+# Hint: use mean(Delta) and filter by D.
+phone_data %>%
+  summarize(
+  ATE = mean(Delta),
+  ATT = mean(Delta[D == 1]),
+  ATU = mean(Delta[D == 0])
+  )
+
+```
+
+**Answers:**
+
+- ATE: 1.167 points
+- ATT: 3 points
+- ATU: -0.667 points
+
+The treatment effects are heterogeneous. The average treatment effect is positive. It doesn't help everyone the same amount, and it doesn't help every student (some students have a negative individual effect).
+
+### Task 1b
+
+Calculate the simple difference in observed outcomes (SDO), $E[Y\mid D=1]-E[Y\mid D=0]$. Is it equal to the ATE here? Explain what the table tells you about why the two numbers might be different.
+
+```{r}
+# Calculate the mean observed outcome for D = 1 minus the mean for D = 0.
+phone_data %>%
+  summarize(
+    treated_mean = mean(Y[D == 1]),
+    untreated_mean = mean(Y[D == 0]),
+    SDO = treated_mean - untreated_mean
+  )
+
+```
+
+**Answer:**
+
+The SDO is not the same as the ATE. Assignment to treated or untreated group is related to the individual delta/ students treatment effects. The treated group has three students with positive effects. The untreated has two students with negative effects and one with no effect. 
+
+
+## 2. Random assignment as a design
+
+We now create a larger study. Students have different baseline preparation, and the treatment effect varies across students. In the first version, treatment is assigned at random. In the second, students with higher preparation are more likely to receive treatment. The same potential outcomes are used in both versions, only the assignment changes.
+
+```{r}
+set.seed(3300)
+n <- 500
+
+study <- tibble(
+  id = seq_len(n),
+  preparation = rnorm(n, mean = 0, sd = 1),
+  Y0 = 70 + 8 * preparation + rnorm(n, mean = 0, sd = 5),
+  effect = 3 + 1.5 * preparation + rnorm(n, sd = 1.5)
+) %>%
+  mutate(Y1 = Y0 + effect)
+
+study <- study %>%
+  mutate(
+    D_random = rbinom(n, size = 1, prob = 0.5),
+    D_selected = rbinom(n, size = 1, prob = plogis(0.8 * preparation)),
+    Y_random = D_random * Y1 + (1 - D_random) * Y0,
+    Y_selected = D_selected * Y1 + (1 - D_selected) * Y0
+  )
+
+```
+
+### Task 2a: check assignment and balance
+
+For each assignment method, compare the treatment and control groups' average preparation and average realized score. A randomized sample won't be perfectly balanced, but assignment shouldn't systematically sort students by preparation.
+
+```{r}
+# Create a compact summary with group means for D_random and D_selected.
+# You may use group_by() and summarise(), or pivot_longer() first.
+
+balance_summary <- bind_rows(
+study %>%
+  group_by(treatment = D_random) %>%
+  summarize(n = n(), mean_prep = mean(preparation), mean_score = mean(Y_random), .groups = "drop") %>%
+  mutate(assignment = "Random"),
+study %>%
+    group_by(treatment = D_selected) %>%
+  summarize(n = n(), mean_prep = mean(preparation), mean_score = mean(Y_selected), .groups = "drop") %>%
+  mutate(assignment = "Selected")
+) %>%
+select(assignment, treatment, n, mean_prep, mean_score)
+
+balance_summary
+
+```
+
+**Answer:** Which assignment method seems to sort students by preparation? How can you tell?
+The selected assignment sorts students by preparation so the treated group should have a higher average prep score than the control group. We see that that is the case here, the treated selected group has a higher mean prep average than the untreated selected group. The random average mean prep values are pretty much equal.
+
+
+### Task 2b: estimate the treatment effect
+
+For a binary treatment, the OLS slope in `Y ~ D` is the difference in group means. Estimate this model once for each assignment method. Then calculate the ATE from the full potential-outcomes data. (The ATE calculation is available here only because this is a simulation.)
+
+```{r}
+random_model <- lm(Y_random ~ D_random, data = study)
+
+selected_model <- lm(Y_selected ~ D_selected, data = study)
+# Calculate mean(study$effect)
+
+
+c(mean(study$effect), coef(random_model)["D_random"], coef(selected_model)["D_selected"])
+
+```
+
+**Answer:** Which estimate is closer to the ATE? Why should random assignment make that happen on average? Does your single simulated sample have to match the ATE exactly?
+The random assignment estimate is way closer to the ATE. Random assignment makes treatment independent of potential outcomes in expectation so that the mean differences estimates the ATE across repeated random assignments. 
+
+
+### Task 2c: controls do not recreate randomization
+
+Add `preparation` to the selected-assignment regression. Compare its treatment coefficient with the unadjusted estimate and the ATE.
+
+```{r}
+# Fit the selected-assignment model with preparation as a control.
+selected_adj <- lm(Y_selected ~ D_selected + preparation, data = study)
+
+c(unadjusted_treatment = coef(selected_model)['D_selected'],
+  adj_treatment = coef(selected_adj)['D_selected'],
+  simulated_ATE = mean(study$effect)
+  )
+
+```
+
+**Answer:** Did the control move the estimate? What can measured controls address, and what kinds of differences can still be there?
+
+Adding the control moved the estimate because preparation predicts both treatment and outcome. Including preparation addresses selection here. It doesn't balance unmeasured factors, it doesn't guarantee the ATE. Treatment effects vary with preparation and adjustment reults can depend on how that heterogeneity ends up showing up. 
+
+## 3. Before-and-after comparisons
+
+An event study compares an outcome before and after an event. That comparison is causal ONLY if other causes of the outcome don't change in a way that is mistaken for the event's effect.
+
+The following is one treated unit observed over time. Its outcome trends upward before the event and continues on the same path afterward. The event adds a small 0.5-point effect, but the outcome also rises because of the continuing time trend.
+
+```{r}
+event_data <- tibble(
+  time = 1:8,
+  after = as.integer(time >= 5),
+  outcome = 50 + 2 * time + 0.5 * (time >= 5) + c(0.2, -0.3, 0.1, 0.0, 0.2, -0.2, 0.1, -0.1)
+)
+
+ggplot(event_data, aes(x = time, y = outcome)) +
+  geom_line() + geom_point(size = 2) +
+  geom_vline(xintercept = 4.5, linetype = "dashed") +
+  labs(
+    title = "One unit before and after an event",
+    subtitle = "Dashed line marks the event; the underlying time trend continues",
+    x = "Time", y = "Outcome"
+  ) +
+  theme_minimal()
+```
+
+### Task 3
+
+1. Calculate the mean outcome before and after the event and their difference.
+2. Does that difference equal the treatment effect included in the simulation? (The event-time bump is 0.5.)
+3. What else changed between the before and after periods?
+
+```{r}
+# Calculate the before mean, after mean, and after-minus-before difference.
+
+event_data %>%
+  summarize(
+    before_mean = mean(outcome[after == 0]),
+    after_mean = mean(outcome[after == 1]),
+    change = after_mean - before_mean
+  )
+```
+
+**Answer:**
+The pre event mean is 55 points, the post event mean is 63.5 points, so the total change is 8.5 points and the simulated event time bump is only 0.5 points. So the other 8 points come from....the continuing time trend, most likely. There's an underlying slop of about 2 points per period already. A naive before/ after comparison attributes both changes to the event as opposed to changes that were already happening.
+
+
+## 4. Difference-in-differences
+
+A comparison group helps account for changes over time that would have happened without treatment. We'll observe similar service units over eight weeks. One group adopts a service improvement policy at week 5. The other doesn't adopt it. The policy effect is zero before week 5 and four minutes after week 5. Outcomes are measured in minutes to service, so a negative effect means faster service.
+
+```{r}
+set.seed(3301)
+units <- tibble(
+  unit = 1:40,
+  treated = rep(c(0, 1), each = 20),
+  unit_effect = rnorm(40, mean = 0, sd = 2)
+)
+
+did_data <- tidyr::crossing(units, week = 1:8) %>%
+  mutate(
+    after = as.integer(week >= 5),
+    # Common time trend and common week-to-week shocks
+    common_trend = 0.7 * week,
+    week_shock = rep(c(0.2, -0.4, 0.1, 0.0, 0.3, -0.2, 0.2, -0.1), times = 40),
+    # Treatment effect: -4 minutes for treated units in weeks 5-8
+    policy = treated * after,
+    minutes_to_service = 30 + unit_effect + common_trend + week_shock - 4 * policy + rnorm(n(), sd = 1.4)
+  )
+```
+
+### Task 4a: plot the group trends
+
+Plot average `minutes_to_service` by week for the treated and control groups. Mark the week the policy begins.
+
+```{r}
+# Summarise mean minutes_to_service by treated and week, then plot.
+did_weekly <- did_data %>%
+  group_by(treated, week) %>%
+  summarize(mean_min = mean(minutes_to_service), .groups = "drop")
+
+ggplot(did_weekly, aes( x = week, y = mean_min, color = factor(treated))) +
+  geom_line() + geom_point() +
+  geom_vline(xintercept = 4.5, linetype = "dashed") +
+  scale_color_discrete(labels = c("control", "treated")) +
+  theme_minimal()
+
+```
+
+**Answer:** Do the groups appear to have similar pre-policy trends? What happens after week 5?
+
+
+
+### Task 4b: calculate DiD by hand
+
+Find the mean outcome for each group-period cell, then calculate:
+
+$$DiD=(\bar{Y}_{T,after}-\bar{Y}_{T,before})-(\bar{Y}_{C,after}-\bar{Y}_{C,before}).$$
+
+```{r}
+# Make a 2-by-2 table of average outcomes by treated and after.
+# Then calculate the difference in changes.
+
+```
+
+**Answer:** Interpret the DiD estimate in minutes. How well does it match the simulation?
+
+
+
+### Task 4c: estimate DiD with regression
+
+Estimate the 2-by-2 model:
+
+$$Y_{gt}=\beta_0+\beta_1 Treated_g+\beta_2 After_t+\beta_3(Treated_g\times After_t)+\epsilon_{gt}.$$
+
+The interaction coefficient $\beta_3$ is the DiD estimate.
+
+```{r}
+# Fit minutes_to_service ~ treated * after.
+# Inspect the coefficient on treated:after.
+
+```
+
+**Answer:** How does the interaction estimate compare with the calculation in Task 4b? What do the other coefficients represent in this setup?
+
+
+
+### Task 4d: assess the identifying assumption
+
+The key identifying assumption is parallel trends. Without the policy, the treated and comparison groups would have had the same average change in outcomes over time. The groups can start at different levels, but their untreated trends must be comparable.
+
+1. In this example, what features of the simulation make parallel trends plausible?
+2. Name one reason the assumption could fail in a real policy evaluation.
+3. Why does seeing similar pre-policy trends provide useful evidence but NOT prove the assumption?
+
+**Answer:**
+
+
+
+## 5. Wrap-up
+
+In a short paragraph, answer the following:
+
+- Why can’t we calculate an individual treatment effect from observed data?
+- Why does random assignment make a difference in means a credible estimate of an average causal effect?
+- What comparison does DiD make, and what assumption gives it a causal interpretation?
+
+**Answer:**
+
+
+
+
