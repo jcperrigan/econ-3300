@@ -98,7 +98,6 @@ X[, "x2"] <- plogis(qlogis(0.85) + 0.35 * X[, "x2"])  # attendance proportion
 ```
 
 ```{r}
-
 # now we'll create the student data by using X
 student_data <- as_tibble(X) %>%
   mutate(
