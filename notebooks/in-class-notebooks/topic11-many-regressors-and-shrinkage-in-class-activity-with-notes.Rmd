@@ -1,0 +1,304 @@
+---
+title: "In-Class Activity - Prediction with Many Regressors and Big Data"
+output:
+  html_document:
+    toc: yes
+    toc_depth: 2
+    df_print: kable
+    highlight: tango
+    includes:
+      in_header: wcag-overrides.html
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE)
+```
+
+```{r packages}
+# Run install.packages("glmnet") in the console once if needed.
+#install.packages('glmnet')
+library(glmnet)
+library(kableExtra)
+library(tidyverse)
+```
+
+```{r}
+source('reporting.R')
+```
+
+# Prediction with Many Regressors and Big Data
+
+## Goals for today
+
+1. Explain how a biased estimator can have lower mean squared error.
+2. Compare OLS fits using training and test prediction error.
+3. Use cross-validation to tune ridge and lasso on the same folds.
+4. Explain how the penalties affect the fitted coefficients and predictions.
+
+
+## 1. When does shrinking help? 
+
+Imagine a mean-zero regression error independent of the training sample and a new observation with $x=1$. With a known zero intercept, the error in predicting the conditional mean at $x=1$ is just the error in estimating the slope. Suppose the true slope is 1, and the OLS slope is equally likely to be −1 or 3 across training samples. Try cutting both possible estimates in half.
+
+$y = \beta_1 x + u$
+
+$E[u] = 0$
+
+Estimated model: $\hat{y} = \hat{\beta}_1 x$
+
+We have a 50% chance of estimating $\hat{\beta} = -1$, and a 50% chance of estimating $\hat{\beta} = 3$, depending on the training sample drawn.
+
+Shrinkage constant c can be between 0 and 1: $0 \leq c \leq 1$
+
+$\tilde{\beta} = c \hat{\beta}$
+
+$E[\hat{\beta}] = \beta$
+
+$\text{Bias}(\tilde{\beta}) = c \beta - \beta = (c-1) \beta$
+
+$\text{Var}(\tilde{\beta}) = c^2 Var(\hat{\beta})$
+
+$\text{MSE}(\tilde{\beta}) = c^2 Var(\hat{\beta}) + (1 - c)^2 \beta^2$
+
+Bias is squared because it has a sign, it measures how far the center of an estimator is from the true value (up or down).
+
+### Task 1
+
+Calculate the bias, variance, and MSE for both estimators. Treat the two possible slopes as the entire sampling distribution, each with probability $1/2$. Use the average squared distance from the estimator's own mean for variance.
+
+```{r shrinkage}
+ols_values <- c(-1, 3)
+shrunken_values <- 0.5 * ols_values
+#shrunken_values
+true_slope <- 1
+
+slope_metrics <- function(v) {
+  c(Bias = mean(v) - true_slope,
+    Variance = mean((v - mean(v))^2),
+    MSE = mean((v - true_slope)^2))
+}
+
+knitr::kable(
+  rbind(OLS = slope_metrics(ols_values),
+        Shrinkage = slope_metrics(shrunken_values)),
+  caption = "bias, variance, and MSE across two equally likely samples"
+)
+
+var(ols_values) #n - 1, computing the sample variance with 1 group and dividing 8 by 1
+
+.5 * (-1 - mean(ols_values))^2 + .5 * (3 - mean(ols_values))^2 #we know -1 and 3 are the only possible estimates, so we are weighting by probability
+```
+
+**Answer:** Which part of MSE increases, which part falls, and why does total MSE fall here?
+
+Variance falls from 4 to 1. Bias is now -.5 and squared bias is now .25. The reduction in variance is bigger than the increase in squared bias, so MSE falls from 4 to 1.25. 
+
+
+
+## 2. Fit OLS with a few predictors and with many
+
+We will predict synthetic exam scores using 60 predictors. The first three enter the data-generating process. Predictors 4–12 share a factor with the first three, so they may carry useful information about scores indirectly. Predictors 13–60 are independent noise. Treat the first three as a benchmark based on subject-matter knowledge.
+
+```{r simulate}
+set.seed(3300)
+n_train <- 100
+n_test <- 400
+n <- n_train + n_test
+p <- 60
+
+x <- matrix(rnorm(n * p), nrow = n, ncol = p)
+shared_factor <- rnorm(n)
+x[, 1:12] <- sqrt(0.4) * shared_factor + sqrt(0.6) * x[, 1:12]
+colnames(x) <- paste0("x", seq_len(p))
+
+y <- 70 + 3 * x[, "x1"] + 2 * x[, "x2"] - 2 * x[, "x3"] +
+  rnorm(n, sd = 5)
+exam_data <- data.frame(score = y, x)
+train_rows <- sample.int(n, n_train)
+train <- exam_data[train_rows, ]
+test <- exam_data[-train_rows, ]
+
+mspe <- function(actual, predicted) {
+  mean((actual - predicted)^2)
+}
+```
+
+### Task 2
+
+Fit both models on the training data. One should use only the first three predictors. The other should use all 60. Compute their training mean squared errors. Write down which model you expect to have lower test MSPE and why. Save the model objects for Section 4.
+
+```{r ols}
+# Fit ols_small using score ~ x1 + x2 + x3 and ols_full using score ~ .
+# Compare mspe(train$score, fitted(...)) for the two models.
+
+ols_small <- lm(score ~ x1 + x2 + x3, data = train)
+ols_full <- lm(score ~ ., data = train)
+
+knitr::kable(
+  data.frame(Model = c("OLS with 3", "OLS with 60"),
+             training_MSE = c(mspe(train$score, fitted(ols_small)),
+                              mspe(train$score, fitted(ols_full)))),
+  digits = 2,
+  col.names = c("model", "training MSE"),
+  caption = "training MSE"
+)
+
+
+```
+
+**Answer:** Why can you predict the direction of the training MSE comparison before seeing the output? Do you expect the same ranking on new data?
+
+The big model can just reproduce the small model by settings all the extra slopes to zero. OLS will have a training MSE at least as low as the full model. But we can expect the small model to outperform on the test sample because it includes the direct predictors and avoids estimating 57 additional slopes from just 100 observations.
+
+```{r}
+knitr::kable(
+  data.frame(Model = c("OLS with 3", "OLS with 60"),
+             testing_MSE = c(mspe(test$score, fitted(ols_small)),
+                              mspe(test$score, fitted(ols_full)))),
+  digits = 2,
+  col.names = c("model", "testing MSE"),
+  caption = "testing MSE"
+)
+```
+
+
+## 3. Tune ridge and lasso 
+
+Both models use all 60 candidate predictors. Ridge uses a penalty proportional to the sum of squared slopes. Lasso uses a penalty proportional to the sum of absolute slopes. The intercept is unpenalized. glmnet standardizes predictors internally when fitting, including within each CV training fold. Supply the predictors in their original units when predicting.
+
+```{r cv-setup}
+x_train <- as.matrix(train[, colnames(x)])
+y_train <- train$score
+
+set.seed(3301)
+fold_id <- sample(rep(1:5, length.out = nrow(train)))
+
+# pure lasso, alpha = 1
+# shrinks less important coefficients to zero
+
+# pure ridge, alpha = 0
+# shrinks correlated coefficients towards each other without setting any equal to zero
+
+fit_cv <- function(alpha) {
+  cv.glmnet(x_train, y_train, alpha = alpha, foldid = fold_id,
+            family = "gaussian", type.measure = "mse", standardize = TRUE)
+}
+```
+
+### Task 3a
+
+Use the helper to fit ridge ($\alpha=0$) and lasso ($\alpha=1$). For each, plot the CV results and report the value that minimizes CV error, lambda.min. The vertical lines mark lambda.min and lambda.1se, a more regularized choice. Use lambda.min throughout this activity.
+
+```{r tune, fig.alt="Cross-validation plots show mean squared prediction error and uncertainty across penalty values."}
+# Save fit_cv(0) as ridge_cv and fit_cv(1) as lasso_cv.
+# Use plot() and inspect $lambda.min for each.
+
+ridge_fit <- fit_cv(0)
+
+lasso_fit <- fit_cv(1)
+
+plot(ridge_fit, main = "ridge cross validation")
+
+plot(lasso_fit, main = "lasso cross validation")
+```
+
+$$
+\text{OLS}: \text{min } RSS(b) \\
+\text{Ridge}:  \text{min } \{RSS(b) + \lambda \sum_j b^2_j\} \\
+\text{Lasso}: \text{min } \{RSS(b) + \lambda \sum_j |b_j\} 
+$$
+
+
+**Answer:** What happens to model flexibility as $\lambda$ increases? Why do we use held-out folds and give both methods the same folds?
+
+Larger penalties constrain the slopes more and also reduce model flexibility. Held out folds estimate prediction error on observations that aren't included in the folds that are being used for training so sharing folds make the comparison less sensitiv eto which observations just happened to end up in each training/ testing fold. 
+
+
+### Task 3b
+
+Extract the slopes at lambda.min for each model. Count the exact zeros after dropping the intercept. Compare the estimated slopes on x1, x2, x3, and x13 with the full OLS slopes.
+
+```{r coefficients}
+get_slopes <- function(model) {
+  slopes <- as.matrix(coef(model, s = "lambda.min"))[-1, , drop = FALSE]
+  setNames(slopes[, 1], rownames(slopes))
+}
+# Apply get_slopes() to both models.
+# Use sum(slopes == 0) to count exact zero slopes.
+# Compare the named slopes for x1, x2, x3, and x13.
+
+ridge_slopes <- get_slopes(ridge_fit)
+
+lasso_slopes <- get_slopes(lasso_fit)
+
+terms <- c("x1", "x2", "x3", "x13")
+
+cat("ridge zero slopes", sum(ridge_slopes == 0), "\n")
+cat("lasso zero slopes", sum(lasso_slopes == 0))
+
+knitr::kable(data.frame(predictor = terms, OLS = unname(coef(ols_full)[terms]),
+                        Ridge = unname(ridge_slopes[terms]),
+                        Lasso = unname(lasso_slopes[terms])),
+             digits = 3,
+             caption = "some slopes from full OLS, ridge, and lasso")
+```
+
+**Answer:** Which penalty can produce exact zeros? Does a zero slope establish that a variable has no predictive information?
+
+Lasso can produce exactly zeros. A correlated predictor can supply similar information and the selected set can change across samples.
+
+
+## 4. Compare predictions on untouched test data 
+
+### Task 4
+
+Predict test scores for all four models. Use predict(model, newdata = test) for OLS. Use predict(model, newx = x_test, s = "lambda.min") for ridge and lasso, and convert the one-column result with as.numeric(). Calculate test MSPE and rank the four models.
+
+```{r test-results}
+# Predict test scores using both OLS models and both tuned fits.
+# Compare their test MSPEs in a single table.
+
+
+x_test <- as.matrix(test[, colnames(x)])
+predictions <- list(
+  "OLS, three predictors" = predict(ols_small, newdata = test),
+  "OLS, 60 predictors" = predict(ols_full, newdata = test),
+  "Ridge" = as.numeric(predict(ridge_fit, newx = x_test, s = "lambda.min")),
+  "Lasso" = as.numeric(predict(lasso_fit, newx = x_test, s = "lambda.min"))
+)
+
+errors <- vapply(predictions, function(pred) mspe(test$score, pred), numeric(1))
+errors <- sort(errors)
+
+knitr::kable(
+  data.frame(Model = names(errors), Test_MSPE = unname(errors)),
+  digits = 2,
+  col.names = c("Model", "Test MSPE (squared score points)"),
+  caption = "Prediction error on the 400 held-out observations, from lowest to highest."
+)
+```
+
+**Answer:** Compare the full OLS fit with each penalized fit. How could higher training error go with better test prediction? Why might the three-predictor OLS benchmark perform well?
+
+Full OLS minimizes training error but estimates many slopes from a small training sample. Shrinkage can stabilize predictions enough to offset the bias it introduces. The three-predictor model has a head start because its formula already uses the predictors that directly generate the outcome. Read the exact ranking from the results table. It describes this simulated split.
+
+
+
+## 5. Exit ticket
+
+### Task 5
+
+In two or three sentences, explain what you would do if you had 60 candidate predictors for a real outcome and did not know which mattered. Include how you would select the amount of shrinkage and how you would evaluate prediction after tuning.
+
+**Answer:**
+
+Split off an evaluation sample, then use cross-validation within the training data to choose a penalty and compare candidate models. Refit the chosen specification on all training data and evaluate it on the held-out test data. Use held-out squared prediction error and report it in squared outcome units.
+
+
+
+## Optional extension. Where does PCA fit?
+
+Suppose you replace the 12 correlated predictors with their first principal component and regress the score on that component. What information would that component preserve? Why might a direction with low predictor variance still help predict scores?
+
+The first component preserves the most predictor variance among unit-length linear combinations. It will tend to pick up shared variation here. A low-variance contrast between predictors can still be related to the outcome. The opposite signs on x1 and x3 illustrate why shared movement alone may miss useful information.
+
